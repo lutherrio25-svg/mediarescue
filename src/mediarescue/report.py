@@ -11,6 +11,7 @@ class Severity(str, Enum):
     """Damage class, ordered roughly from trivially fixable to unrecoverable."""
 
     HEALTHY = "healthy"
+    CORRUPT_PAYLOAD = "corrupt-payload"
     MISSING_TRAILER = "missing-trailer"
     FRAGMENTED = "fragmented"
     MISSING_ATOMS = "missing-atoms"

@@ -64,6 +64,20 @@ def test_clean_file_needs_no_cut(tmp_path):
 
 
 @needs_ffmpeg
+def test_overwritten_head_is_not_reported_healthy(tmp_path):
+    """A perfect index over junk pictures must not pass as healthy: a probe would."""
+    from mediarescue.diagnose import diagnose
+    from mediarescue.report import Severity
+
+    clip = tmp_path / "bad.mp4"
+    make_clip(clip)
+    corrupt_head(clip, fraction=0.3)
+
+    assert diagnose(clip, hash_file=False).severity == Severity.CORRUPT_PAYLOAD
+    assert probe(clip)["ok"]  # the lie the old classifier believed
+
+
+@needs_ffmpeg
 def test_salvage_drops_only_the_corrupt_head(tmp_path):
     clip = tmp_path / "bad.mp4"
     make_clip(clip)

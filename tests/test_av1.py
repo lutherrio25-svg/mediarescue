@@ -47,3 +47,19 @@ def test_encoder_tag_detected_but_real_aac_frames_are_not():
     assert looks_like_encoder_tag(blob)
     assert not looks_like_encoder_tag(b"\x21\x10\x04\x60\x8c\x1c" * 4)   # AAC frames
     assert not looks_like_encoder_tag(b"Lavc")                            # too short
+
+
+@needs_av1
+def test_av1_head_is_not_flagged_as_junk(tmp_path):
+    """AV1 samples have no NAL length prefixes; the junk check must not convict them."""
+    from mediarescue.diagnose import diagnose
+    from mediarescue.report import Severity
+    from mediarescue.tables import head_is_junk
+
+    clip = tmp_path / "av1.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=160x96:rate=10",
+                    "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "2",
+                    "-c:v", "libaom-av1", "-cpu-used", "8", "-b:v", "200k",
+                    "-c:a", "aac", "-b:a", "64k", str(clip)], check=True, capture_output=True)
+    assert head_is_junk(clip) is False
+    assert diagnose(clip, hash_file=False).severity == Severity.HEALTHY

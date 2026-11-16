@@ -47,6 +47,7 @@ mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten|salvage
 | Severity | Meaning | Strategy | Needs reference |
 |---|---|---|---|
 | `healthy` | boxes parse, index reachable | `remux` (optional cleanup) | no |
+| `corrupt-payload` | index is perfect but the first video sample does not parse (head overwritten) | `salvage` | no |
 | `missing-trailer` | `mdat` runs past EOF, hiding a valid `moov`; truncated PNG/JPEG | `salvage` (trim, then cut a junk head) | no |
 | `fragmented` | starts at `moof`/`mdat`, init segment lost | `flatten` | yes |
 | `missing-atoms` | `ftyp`+`mdat` present, `moov` gone | `graft` | yes |
@@ -86,6 +87,8 @@ mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten|salvage
   ```
 - `salvage` reports `dropped_seconds` instead of hiding the damage: an overwritten head is
   cut away, never concealed with silence and frozen frames.
+- `corrupt-payload` is decided by parsing the first video sample: H.264 must tile as
+  length-prefixed NALs, AV1 must frame as OBUs. Anything else counts as junk.
 - Zero-filled or overwritten `mdat` regions are gone for good. No tool can invent frames;
   re-download or restore from backup for those.
 - Audio in partially recovered files may still contain decode errors where payload was lost.

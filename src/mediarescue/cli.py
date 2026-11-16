@@ -73,6 +73,7 @@ def cmd_fix(args) -> int:
             # strict superset of trim: same result on a clean tail, usable file when the head
             # was overwritten.
             Severity.MISSING_TRAILER: "salvage",
+            Severity.CORRUPT_PAYLOAD: "salvage",
             Severity.FRAGMENTED: "flatten",
         }.get(d.severity, "remux" if d.severity == Severity.HEALTHY else "graft")
 

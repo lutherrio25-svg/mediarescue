@@ -72,6 +72,14 @@ def diagnose(path: str | Path, hash_file: bool = True) -> Diagnosis:
         sev = Severity.HEALTHY
         notes.append("top-level boxes parse cleanly" if tail_moov is None else
                      "moov stored at end of file (normal for non-faststart MP4)")
+        # Boxes parsing says nothing about the pictures. A head overwritten with junk keeps a
+        # perfect index, so a probe passes while every early frame is garbage.
+        if suffix in MP4_SUFFIXES:
+            from .tables import head_is_junk
+            if head_is_junk(p):
+                sev = Severity.CORRUPT_PAYLOAD
+                notes.append("first video sample does not parse: the head was overwritten; "
+                             "salvage will cut to the first clean IDR")
     else:
         sev = Severity.HEADERLESS if ratio > 0.4 else Severity.MISSING_ATOMS
         notes.append("no parsable box at offset 0")

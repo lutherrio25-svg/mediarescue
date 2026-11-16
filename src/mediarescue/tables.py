@@ -5,8 +5,11 @@ tells us exactly where the damage stops.
 """
 from __future__ import annotations
 
+import mmap
 import struct
+from typing import cast
 
+from .av1 import is_av1_sample
 from .mp4 import Box, find, iter_all, read_boxes
 
 
@@ -87,6 +90,34 @@ def nal_types(d: bytes) -> list[int] | None:
         types.append(d[p + 4] & 0x1F)
         p += 4 + length
     return types if p == len(d) and types else None
+
+
+def head_is_junk(path) -> bool:
+    """True when the first video sample does not parse, i.e. the head was overwritten.
+
+    AV1 samples are recognised by their OBU framing and cleared; a sample that parses as
+    neither AV1 nor H.264 is junk. Returns False when there is no video track or the index
+    cannot be read — an unknown is not an accusation.
+    """
+    try:
+        with open(path, "rb") as f:
+            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                moov = locate_moov(mm)
+                if moov is None:
+                    return False
+                for trak in (b for b in read_boxes(cast(bytes, mm), moov.payload, moov.end)
+                             if b.type == "trak"):
+                    table = sample_table(mm, trak)
+                    if not table or table["handler"] != b"vide" or not table["samples"]:
+                        continue
+                    first = table["samples"][0]
+                    data = mm[first["offset"]:first["offset"] + first["size"]]
+                    if is_av1_sample(data):
+                        return False
+                    return nal_types(data) is None
+    except (ValueError, OSError):
+        return False
+    return False
 
 
 def first_clean_keyframe(buf) -> dict | None:
