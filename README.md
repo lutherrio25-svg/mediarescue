@@ -1,48 +1,134 @@
 # mediarescue
 
-Diagnose and repair damaged audio/video files. **Originals are never modified** — every
-repair writes a new file and then checks it with `ffprobe`. Treat that probe as a smoke test
-only: a container can parse perfectly while the frames inside are garbage, so the real proof
-is a full decode (see *Honest limits*).
+Diagnose and repair damaged audio/video files from the command line. It tells you what is
+wrong with a file, repairs it into a **new** file, and reports exactly what it had to give up.
 
-Built for the failures that actually show up on a real disk: interrupted copies,
-zero-filled heads, fragmented MP4s that lost their init segment, 0-byte downloads.
+**Originals are never modified.** Nothing is overwritten, nothing is deleted.
+
+Built for the failures that actually show up on a real disk: interrupted copies, zero-filled
+heads, fragmented MP4s that lost their init segment, downloads that never finished.
 
 ## Install
 
 ```bash
-pip install -e .          # Python 3.10+, no runtime dependencies
-
-# or straight from GitHub
 pip install "git+https://github.com/lutherrio25-svg/mediarescue.git"
 ```
 
-`ffmpeg` + `ffprobe` must be on `PATH` for repair and validation
-(override with `MEDIARESCUE_FFMPEG` / `MEDIARESCUE_FFPROBE`).
+Requires Python 3.10+ and `ffmpeg` + `ffprobe` on your `PATH`:
 
-## Usage
+| Platform | Command |
+|---|---|
+| Windows | `winget install --id Gyan.FFmpeg -e` |
+| macOS | `brew install ffmpeg` |
+| Debian/Ubuntu | `sudo apt install ffmpeg` |
+
+`winget` only updates `PATH` for **new** shells, so close the terminal and open a fresh one.
+Confirm with `ffmpeg -version` and `mediarescue --version`. If ffmpeg lives somewhere unusual,
+point at it with `MEDIARESCUE_FFMPEG` / `MEDIARESCUE_FFPROBE`.
+
+## Quick start
+
+Three commands, in order.
+
+**1. Find out what is broken.** Point it at a file or a whole folder:
 
 ```bash
-# Classify everything under a directory (system/cache dirs are skipped)
-mediarescue scan D:/broken-file --out report.json
-
-# One file, automatic strategy
-mediarescue fix broken.mp4 -o fixed.mp4
-
-# Missing moov / fragmented files need an intact file from the same device or encoder
-mediarescue fix dash-segment.mp4 --reference intact-from-same-camera.mp4 -o fixed.mp4
-
-# If audio and video durations still disagree, force one clock for every track
-mediarescue fix dash-segment.mp4 --reference intact.mp4 --timescale 90000 -o fixed.mp4
-
-# Head replaced by junk: keep the clean tail and report what had to go
-mediarescue fix truncated.mp4 --strategy salvage -o recovered.mp4
-
-# Force a strategy
-mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten|salvage
+mediarescue scan "D:/broken-file"
 ```
 
-## Damage classes
+```
+healthy            305,314,172  yes  D:\broken-file\holiday.mp4
+corrupt-payload         92,464  yes  D:\broken-file\clip.mp4
+
+2 scanned, 1 damaged, 1 repairable, 0 need a reference file
+```
+
+Columns: damage class, size in bytes, `yes`/`no` for repairable, path. Add `--out report.json`
+to keep the full details.
+
+**2. Repair the damaged file.** Leave the strategy on `auto` — it is chosen from the scan
+result:
+
+```bash
+mediarescue fix "D:/broken-file/clip.mp4" -o "D:/fixed/clip.mp4"
+```
+
+You get one diagnosis line, then JSON saying what it did:
+
+```
+diagnosis: missing-trailer — mdat declares 26,383,400 bytes but file is 18,530,556;
+           moov sits inside that dead range at 18,407,240 — trim mdat to expose it
+{
+  "ok": true,
+  "output": "D:/fixed/clip.mp4",
+  "notes": [
+    "mdat header trimmed: 7,976,192 declared bytes were never written to disk",
+    "dropped the first 14.000s: 339 unreadable samples before the first clean IDR at sample #350"
+  ],
+  "dropped_seconds": 14.0,
+  "strategy": "salvage"
+}
+```
+
+Read `notes` and `dropped_seconds` — that is the honest part. If it reports 14 seconds dropped,
+your repaired video starts 14 seconds in, because that head was unreadable garbage.
+
+**3. Prove the repair.** `ffprobe` reads headers, so a file can look perfect and still be noise
+inside. A full decode is the real test — **silence means it worked**:
+
+```bash
+ffmpeg -v error -i "D:/fixed/clip.mp4" -f null -
+```
+
+Nothing printed means the frames really decode. Then open the file and look at it.
+
+## Which command do I need?
+
+| What you see | Run this |
+|---|---|
+| Not sure what is wrong | `mediarescue scan <file-or-folder>` |
+| File will not open or play at all | `mediarescue fix broken.mp4 -o fixed.mp4` |
+| Plays, but freezes or shows coloured blocks | `mediarescue fix broken.mp4 -o fixed.mp4` |
+| Starts mid-scene, first seconds are garbage | `mediarescue fix broken.mp4 -o fixed.mp4` (`auto` picks `salvage`) |
+| Video plays, audio clicks or drops out | run the decode check first; audio payload that is gone cannot be invented |
+| File is 0 bytes | nothing to recover — re-download or restore a backup |
+| Everything already looks fine | `mediarescue fix good.mp4 -o copy.mp4` rewrites the container cleanly |
+
+## The one thing that trips everyone up: `--reference`
+
+Two damage classes — `fragmented` and `missing-atoms` — mean the file lost the index that says
+*where each frame starts*. That index cannot be guessed back, so the tool needs a second,
+undamaged file to borrow the layout from:
+
+```bash
+mediarescue fix dash-segment.mp4 --reference intact.mp4 -o fixed.mp4
+```
+
+What counts as a good reference:
+
+- an **intact file from the same app, camera or recorder** — same settings, ideally the same
+  session
+- the **video codec must match**. A fragmented AV1 file can borrow structure from an H.264
+  file, but a source that is itself H.264 needs an H.264 reference, or it is refused instead
+  of producing garbage
+- it does not have to be the same video — anything that opens and plays normally will do
+
+No reference anywhere? Those two classes cannot be rebuilt. Try `--strategy salvage` anyway: if
+the damage sits only in the head, you still get the clean remainder.
+
+## When it cannot be fixed
+
+This is a repair tool, not a magic wand:
+
+- overwritten or zero-filled data is **gone**. No tool can invent frames that were never
+  written; re-download or restore from backup
+- a dropped head stays dropped — `salvage` reports the seconds instead of faking them
+- audio packets lost in the middle cannot be reconstructed; the file plays with gaps
+- it works on existing files only. Carving files off a raw disk is a different job (PhotoRec)
+
+## Reference
+
+### Damage classes
 
 | Severity | Meaning | Strategy | Needs reference |
 |---|---|---|---|
@@ -54,47 +140,43 @@ mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten|salvage
 | `headerless` | no parsable box, large zero regions | not repairable locally | — |
 | `empty` | 0 bytes | not repairable | — |
 
-## Strategies
+### Strategies
 
 - **remux** — `ffmpeg -c copy` container rewrite with corrupt-packet tolerance.
-- **trim** — shrink an oversized `mdat` header to the real payload so the trailing
-  `moov` becomes reachable again, then remux. No re-encode.
+- **trim** — shrink an oversized `mdat` header to the real payload so the trailing `moov`
+  becomes reachable again, then remux. No re-encode.
 - **graft** — keep the damaged `mdat`, graft the reference `moov`, rewrite every
-  `stco`/`co64` chunk offset by the position delta. Refuses on overflow or when the
-  reference has no usable sample table.
+  `stco`/`co64` chunk offset by the position delta. Refuses on overflow or when the reference
+  has no usable sample table.
 - **flatten** — parse `tfhd`/`trun` from every fragment, rebuild `stts`/`ctts`/`stsc`/`stsz`/
   `stco`/`stss`, and emit a normal non-fragmented MP4. The codec is sniffed from the sample
   bytes: **AV1** gets an `av01`/`av1C` entry built from the stream's own sequence header (no
-  reference codec is borrowed); **H.264** reuses the reference's `avcC`, and a reference with
-  a different video codec is refused instead of producing garbage. Audio timescale is inferred
+  reference codec is borrowed); **H.264** reuses the reference's `avcC`, and a reference with a
+  different video codec is refused instead of producing garbage. Audio timescale is inferred
   from sample durations. Samples past EOF from a truncated final fragment are dropped and
   counted, not fatal.
 - **salvage** — for a file whose *head* was overwritten (a resume that landed at the wrong
   offset, a copy that mixed two files). Trims an oversized `mdat`, then walks the sample table
   to find the first video sample that parses as length-prefixed NALs containing an IDR, and
-  stream-copies from that timestamp. The cut is reported, so you know exactly how much was
-  lost and how much is bit-identical. Nothing is re-encoded, and the corrupt head is dropped
-  rather than concealed — a frozen frame over dead data helps nobody.
+  stream-copies from that timestamp. The cut is reported, so you know exactly how much was lost
+  and how much is bit-identical. Nothing is re-encoded, and the corrupt head is dropped rather
+  than concealed — a frozen frame over dead data helps nobody.
 
-## Honest limits
+Force one explicitly with `--strategy trim|remux|graft|flatten|salvage`. If audio and video
+durations still disagree after a `flatten`, give every track one clock with `--timescale 90000`.
 
-- A reference must match the recording's codec configuration; a wrong one yields a file
-  that probes fine but decodes wrong. Always eyeball the result.
-- `ffprobe` reads headers, not pictures. Prove a repair with a full decode and require
-  **zero** output lines:
-  ```bash
-  ffmpeg -v error -i fixed.mp4 -f null -      # silence = the frames really decode
-  ```
-- `salvage` reports `dropped_seconds` instead of hiding the damage: an overwritten head is
-  cut away, never concealed with silence and frozen frames.
+### Honest limits
+
+- A reference must match the recording's codec configuration; a wrong one yields a file that
+  probes fine but decodes wrong. Always eyeball the result.
+- `ffprobe` reads headers, not pictures. Prove a repair with the full decode from step 3 and
+  require **zero** output lines.
 - `corrupt-payload` is decided by parsing the first video sample: H.264 must tile as
   length-prefixed NALs, AV1 must frame as OBUs. Anything else counts as junk.
-- Zero-filled or overwritten `mdat` regions are gone for good. No tool can invent frames;
-  re-download or restore from backup for those.
-- Audio in partially recovered files may still contain decode errors where payload was lost.
-- Not a carve-from-raw-disk tool (use PhotoRec for that); this works on existing files.
+- AV1 keyframes are not located yet, so `salvage` on an AV1 source falls back to remuxing the
+  whole file instead of cutting.
 
-## Sources
+### Sources
 
 Format specs and prior art this tool is built on:
 
@@ -107,7 +189,7 @@ Format specs and prior art this tool is built on:
 - [untrunc](https://github.com/ponchio/untrunc) — the established reference-based MP4 repair tool; `graft` follows the same idea.
 - [PhotoRec](https://www.cgsecurity.org/wiki/PhotoRec) — for carving files from a raw disk, which this tool does not do.
 
-## Development
+### Development
 
 ```bash
 pip install -e .[dev]
