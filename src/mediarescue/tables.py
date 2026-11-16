@@ -9,7 +9,7 @@ import mmap
 import struct
 from typing import cast
 
-from .av1 import is_av1_sample
+from .av1 import av1_is_keyframe, is_av1_sample
 from .mp4 import Box, find, iter_all, read_boxes
 
 
@@ -121,7 +121,11 @@ def head_is_junk(path) -> bool:
 
 
 def first_clean_keyframe(buf) -> dict | None:
-    """Where the decodable video really starts, and how many samples were junk before it."""
+    """Where the decodable video really starts, and how many samples were junk before it.
+
+    Handles both codecs this tool understands: H.264 (an IDR inside length-prefixed NALs) and
+    AV1 (a KEY_FRAME in the first frame OBU).
+    """
     moov = locate_moov(buf)
     if moov is None:
         return None
@@ -132,11 +136,18 @@ def first_clean_keyframe(buf) -> dict | None:
         t, junk = 0.0, 0
         for index, sample in enumerate(table["samples"]):
             data = buf[sample["offset"]:sample["offset"] + sample["size"]]
+            # Decide per sample, not once from sample 0: a corrupt head must not be able to
+            # hide which codec the rest of the file is.
             types = nal_types(data)
-            if types is None:
+            if types is not None:
+                clean, codec = 5 in types, "h264"
+            elif is_av1_sample(data):
+                clean, codec = av1_is_keyframe(data), "av1"
+            else:
+                clean, codec = False, None
                 junk += 1
-            elif 5 in types:  # IDR
+            if clean:
                 return {"time": t, "index": index, "dropped": junk,
-                        "timescale": table["timescale"]}
+                        "timescale": table["timescale"], "codec": codec}
             t += sample["duration"] / table["timescale"]
     return None

@@ -74,6 +74,27 @@ def sniff_video_codec(samples_bytes: list[bytes]) -> str:
     return "unknown"
 
 
+def av1_is_keyframe(sample: bytes) -> bool:
+    """True when the first frame OBU in this sample is a KEY_FRAME.
+
+    OBU_FRAME (6) and OBU_FRAME_HEADER (3) both start with the frame header, whose first bits
+    are show_existing_frame, then a 2-bit frame_type where 0 means KEY_FRAME. That is all the
+    information needed to find where decodable video starts, without parsing the rest.
+    """
+    try:
+        for typ, _start, p0, p1 in iter_obus(sample):
+            if typ in (3, 6):
+                payload = sample[p0:p1]
+                if not payload:
+                    return False
+                if (payload[0] >> 7) & 1:      # show_existing_frame: not a new picture
+                    return False
+                return ((payload[0] >> 5) & 0b11) == 0
+    except (ValueError, IndexError):
+        return False
+    return False
+
+
 class _Bits:
     def __init__(self, b: bytes):
         self.b, self.p = b, 0

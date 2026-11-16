@@ -60,14 +60,39 @@ def source_video_codec(path: Path) -> str | None:
         return None
 
 
-def find_reference(src: Path, limit: int = 40) -> Path | None:
-    """A healthy file beside `src` whose video codec matches, or None."""
+def find_reference(src: Path, limit: int = 40, depth: int = 2) -> Path | None:
+    """A healthy file near `src` whose video codec matches, or None.
+
+    Searches the same folder, its sub-folders, then one level up (a recorder that writes
+    segments into dated folders keeps the intact file either below or beside the damaged one).
+    Everything is capped, so a huge tree cannot turn this into a full-disk scan.
+    """
     wanted = source_video_codec(src)
     if wanted is None:
         return None
-    siblings = [p for p in sorted(src.parent.iterdir())
-                if p.is_file() and p != src and p.suffix.lower() in MEDIA_SUFFIXES]
-    for candidate in siblings[:limit]:
+
+    roots = [src.parent]
+    if depth >= 2 and src.parent.parent != src.parent:
+        roots.append(src.parent.parent)
+
+    candidates: list[Path] = []
+    for root in roots:
+        try:
+            candidates += [p for p in sorted(root.iterdir())
+                           if p.is_file() and p != src and p.suffix.lower() in MEDIA_SUFFIXES]
+            subdirs = [p for p in sorted(root.iterdir()) if p.is_dir()][:20]
+        except OSError:
+            continue
+        for sub in subdirs:
+            try:
+                candidates += [p for p in sorted(sub.rglob("*"))
+                               if p.is_file() and p != src and p.suffix.lower() in MEDIA_SUFFIXES]
+            except OSError:
+                continue
+            if len(candidates) >= limit * 4:
+                break
+
+    for candidate in candidates[:limit]:
         if _mapped_codec(candidate) != wanted:
             continue
         if diagnose(candidate, hash_file=False).severity != Severity.HEALTHY:

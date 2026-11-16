@@ -13,8 +13,9 @@ Everything below was added while repairing real damaged files; each item is cove
 - Files whose payload is never inspected now say so in their notes instead of looking clean.
 
 **Repair**
-- `salvage`: cut an overwritten head away at the first clean IDR and report the seconds lost,
-  instead of concealing dead data with silence and frozen frames.
+- `salvage`: cut an overwritten head away at the first clean keyframe — an H.264 IDR or an AV1
+  `KEY_FRAME` — and report the seconds lost, instead of concealing dead data with silence and
+  frozen frames.
 - `carve`: rebuild video from a bare H.264 payload when the index is gone *and* no reference
   exists. Refuses — with the reason — when SPS/PPS lived only in the lost `avcC`, or when
   samples are interleaved one-per-chunk.

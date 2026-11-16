@@ -49,7 +49,9 @@ def salvage(src: Path, out: Path) -> dict:
             result["reason"] = f"stream copy from {key['time']:.3f}s failed: {log[-300:]}"
             return result
         notes.append(f"dropped the first {key['time']:.3f}s: {key['dropped']} unreadable "
-                     f"samples before the first clean IDR at sample #{key['index']}")
+                     f"samples before the first clean "
+                     f"{'keyframe' if key.get('codec') == 'av1' else 'IDR'} at sample "
+                     f"#{key['index']}")
         result["dropped_seconds"] = round(key["time"], 3)
     else:
         notes.append("no clean IDR found; keeping the file whole" if key is None

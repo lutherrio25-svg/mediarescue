@@ -216,10 +216,10 @@ This is a repair tool, not a magic wand:
   counted, not fatal.
 - **salvage** — for a file whose *head* was overwritten (a resume that landed at the wrong
   offset, a copy that mixed two files). Trims an oversized `mdat`, then walks the sample table
-  to find the first video sample that parses as length-prefixed NALs containing an IDR, and
-  stream-copies from that timestamp. The cut is reported, so you know exactly how much was lost
-  and how much is bit-identical. Nothing is re-encoded, and the corrupt head is dropped rather
-  than concealed — a frozen frame over dead data helps nobody.
+  to find the first video sample that really starts a picture — an H.264 IDR, or an AV1
+  `KEY_FRAME` — and stream-copies from that timestamp. The cut is reported, so you know exactly
+  how much was lost and how much is bit-identical. Nothing is re-encoded, and the corrupt head is
+  dropped rather than concealed — a frozen frame over dead data helps nobody.
 - **carve** — the last resort when the index is gone *and* there is no reference file: walk the
   raw `mdat` for length-prefixed NAL units, rebuild an Annex-B stream and let ffmpeg write a
   fresh index. It needs two things the file may not have: **SPS/PPS in-band** (encoders usually
@@ -248,12 +248,13 @@ mediarescue fix damaged.mp4 -o rebuilt.mp4 --strategy carve --fps 30
   header scan**: those containers are reported as `healthy` as soon as they are readable, so a
   file with a mangled middle still scans clean. `scan --deep` catches it by decoding, and
   `fix --deep` applies the same check to the input.
-- AV1 keyframes are not located yet, so `salvage` on an AV1 source falls back to remuxing the
-  whole file instead of cutting.
+- AV1 is cut at its own KEY_FRAME now, but a damaged AV1 head is only recoverable when a later
+  keyframe exists **and** the sequence header travels in-band; otherwise nothing can decode it.
 - `carve` works only when SPS/PPS travel in-band and video samples are contiguous; it recovers
   video without audio and assumes the frame rate. Everything else it refuses, with the reason.
-- Automatic reference selection looks at the **same folder only** (first 40 media files, not
-  recursive). Point `--reference` explicitly when the intact file lives elsewhere.
+- Automatic reference selection looks at the **same folder, its sub-folders and one level up**
+  (capped at 40 candidates). Point `--reference` explicitly when the intact file lives further
+  away.
 
 ### Sources
 

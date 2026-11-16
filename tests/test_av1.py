@@ -63,3 +63,45 @@ def test_av1_head_is_not_flagged_as_junk(tmp_path):
                     "-c:a", "aac", "-b:a", "64k", str(clip)], check=True, capture_output=True)
     assert head_is_junk(clip) is False
     assert diagnose(clip, hash_file=False).severity == Severity.HEALTHY
+
+
+@needs_av1
+def test_av1_keyframes_are_found_and_salvage_cuts_to_one(tmp_path):
+    """AV1 has no IDR: the cut point is the first KEY_FRAME, and a corrupt head must not hide it."""
+    from mediarescue.av1 import av1_is_keyframe
+    from mediarescue.mp4 import read_boxes
+    from mediarescue.salvage import salvage
+    from mediarescue.tables import first_clean_keyframe, locate_moov, sample_table
+
+    def decode_errors(path):
+        p = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
+                           capture_output=True, text=True)
+        return len([ln for ln in p.stderr.splitlines() if not ln.startswith("[null @")])
+
+    clip = tmp_path / "g.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=25",
+                    "-t", "4", "-c:v", "libaom-av1", "-cpu-used", "8", "-b:v", "300k",
+                    "-g", "25", str(clip)], check=True, capture_output=True)
+
+    buf = clip.read_bytes()
+    moov = locate_moov(buf)
+    trak = [b for b in read_boxes(buf, moov.payload, moov.end) if b.type == "trak"][0]
+    table = sample_table(buf, trak)
+    flags = [av1_is_keyframe(buf[s["offset"]:s["offset"] + s["size"]]) for s in table["samples"]]
+    assert flags[0] is True and flags.count(True) >= 3
+
+    data = bytearray(buf)
+    start = data.find(b"mdat") + 4
+    span = int((len(data) - start) * 0.3)
+    data[start:start + span] = bytes((i * 37) % 256 for i in range(span))
+    bad = tmp_path / "bad.mp4"
+    bad.write_bytes(bytes(data))
+
+    key = first_clean_keyframe(bad.read_bytes())
+    assert key and key["codec"] == "av1" and key["time"] > 0.5, key
+
+    out = tmp_path / "fixed.mp4"
+    result = salvage(bad, out)
+    assert result["ok"], result
+    assert result["dropped_seconds"] > 0.5
+    assert decode_errors(out) == 0

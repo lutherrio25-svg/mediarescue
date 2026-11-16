@@ -4,6 +4,11 @@ name: publish image
 # so a damaged file can be repaired without installing Python anywhere.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "extra image tag, e.g. 0.2.0 (empty = latest only)"
+        required: false
+        default: ""
   push:
     tags: ["v*"]
 
@@ -27,6 +32,7 @@ jobs:
           tags: |
             type=ref,event=tag
             type=raw,value=latest
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
       - uses: docker/build-push-action@v6
         with:
           context: .

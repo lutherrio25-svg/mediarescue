@@ -49,14 +49,30 @@ def test_reference_is_picked_by_codec_not_by_name(tmp_path):
 
 @needs_ffmpeg
 def test_no_reference_when_the_folder_has_no_match(tmp_path):
-    frag_dir = tmp_path / "frag"
-    frag_dir.mkdir()
     good = tmp_path / "good.mp4"
     make_clip(good)
-    frag = frag_dir / "frag.mp4"
+    # Two levels down: outside the search cone (same folder + sub-folders + one level up).
+    deep = tmp_path / "x" / "y"
+    deep.mkdir(parents=True)
+    frag = deep / "frag.mp4"
     make_fragmented(good, frag)
 
     assert find_reference(frag) is None
+
+
+@needs_ffmpeg
+def test_reference_is_found_in_a_sibling_folder(tmp_path):
+    """Segments in dated folders: the intact file lives beside the damaged one, not in it."""
+    seg = tmp_path / "2026-11-16"
+    seg.mkdir()
+    good_dir = tmp_path / "intact"
+    good_dir.mkdir()
+    good = good_dir / "good.mp4"
+    make_clip(good)
+    frag = seg / "frag.mp4"
+    make_fragmented(good, frag)
+
+    assert find_reference(frag) == good
 
 
 @needs_ffmpeg

@@ -91,10 +91,12 @@ def test_carve_refuses_when_sps_pps_lived_in_the_index(tmp_path):
 
 @needs_ffmpeg
 def test_cli_falls_back_to_carve_when_no_reference_is_given(tmp_path, capsys):
-    good = tmp_path / "good.mp4"
+    good = tmp_path / "src" / "good.mp4"
+    good.parent.mkdir()
     make_clip(good, audio=False)
-    lonely = tmp_path / "lonely"          # no siblings, so nothing can be auto-picked
-    lonely.mkdir()
+    # Two levels below any video file: the reference search cannot reach it, so carve must run.
+    lonely = tmp_path / "lonely" / "deeper"
+    lonely.mkdir(parents=True)
     bare = lonely / "bare.mp4"
     strip_index(good, bare)
 
