@@ -15,12 +15,12 @@ def test_fix_refuses_empty(tmp_path, capsys):
     assert not list(tmp_path.glob("*.repaired.*"))
 
 
-def test_fix_on_a_directory_explains_instead_of_crashing(tmp_path, capsys):
-    (tmp_path / "a.mp4").write_bytes(b"\x00" * 64)
-    assert main(["fix", str(tmp_path)]) == 2
-    err = capsys.readouterr().err
-    assert "is a directory" in err and "scan" in err
-    assert "Traceback" not in err
+def test_fix_on_a_directory_runs_a_batch(tmp_path, capsys):
+    (tmp_path / "a.mp4").write_bytes(b"\x00" * 64)      # unrepairable, skipped
+    assert main(["fix", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "1 files: 0 repaired, 0 failed, 1 skipped" in out
+    assert "Traceback" not in out
 
 
 def test_diagnose_on_a_directory_is_unsupported(tmp_path):

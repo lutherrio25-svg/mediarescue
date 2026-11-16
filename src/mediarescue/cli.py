@@ -60,12 +60,89 @@ def cmd_doctor(args) -> int:
     return code
 
 
+def _pick_strategy(severity: Severity, requested: str) -> str:
+    if requested != "auto":
+        return requested
+    return {
+        # salvage is trim + remux + (only when needed) dropping a junk head, so it is a strict
+        # superset of trim: same result on a clean tail, usable file when the head was overwritten.
+        Severity.MISSING_TRAILER: "salvage",
+        Severity.CORRUPT_PAYLOAD: "salvage",
+        Severity.FRAGMENTED: "flatten",
+    }.get(severity, "remux" if severity == Severity.HEALTHY else "graft")
+
+
+def _repair(src: Path, out: Path, args, d) -> dict:
+    """Run one strategy and verify the result. Prints nothing; returns the result dict."""
+    strategy = _pick_strategy(d.severity, args.strategy)
+
+    if strategy == "trim":
+        from .trim import trim_mdat
+        trimmed = out.with_name(out.stem + ".trimmed" + out.suffix)
+        t = trim_mdat(src, trimmed)
+        if not t["ok"]:
+            return {"ok": False, "strategy": "trim", "reason": t.get("reason"), "notes": []}
+        ok, log = remux(trimmed, out)
+        if not ok and probe(trimmed).get("ok"):
+            result = {"ok": True, "output": str(trimmed),
+                      "note": "remux failed; trimmed copy verified instead"}
+        else:
+            trimmed.unlink(missing_ok=True)
+            result = {"ok": ok, "output": str(out) if ok else "", "log": log[-400:]}
+        result.update({"strategy": "trim", "trim": t})
+    elif strategy == "salvage":
+        from .salvage import salvage
+        result = salvage(src, out)
+    elif strategy == "remux":
+        ok, log = remux(src, out)
+        result = {"ok": ok, "output": str(out) if ok else "", "log": log[-400:]}
+    elif strategy == "carve":
+        from .carve import carve
+        result = carve(src, out, fps=args.fps)
+    elif not args.reference:
+        # Index gone and no reference: rebuild from the payload itself (video only).
+        from .carve import carve
+        result = carve(src, out, fps=args.fps)
+        if not result.get("ok"):
+            result["note"] = "no --reference given, so carve was tried instead"
+    else:
+        ref = Path(args.reference)
+        if strategy == "flatten":
+            from .fragmented import flatten
+            result = flatten(src, ref, out, force_timescale=args.timescale)
+        else:
+            from .graft import graft
+            r = graft(src, ref, out)
+            result = {"ok": r.ok, "output": r.output, "tracks": r.tracks,
+                      "samples": r.samples, "reason": r.reason}
+    result.setdefault("strategy", strategy)
+
+    if result.get("ok"):
+        result["probe"] = probe(Path(result["output"]))
+        if not args.no_verify:
+            from .ffmpeg import decode_check
+            clean, lines, first = decode_check(Path(result["output"]))
+            result["verify"] = {"ok": clean, "decode_errors": lines}
+            if not clean:
+                result["verify"]["first_error"] = first
+        result["source_untouched"] = True
+    return result
+
+
+def _result_ok(result: dict) -> bool:
+    return bool(result.get("ok")) \
+        and result.get("probe", {}).get("ok", True) \
+        and result.get("verify", {}).get("ok", True)
+
+
 def cmd_fix(args) -> int:
-    src = Path(args.file)
-    if src.is_dir():
-        print(f"refusing: {src} is a directory. Run `mediarescue scan \"{src}\"` to list the "
-              f"damaged files, then fix them one at a time.", file=sys.stderr)
-        return 2
+    targets = [Path(p) for p in args.file]
+    if len(targets) == 1 and targets[0].is_file():
+        return _fix_single(targets[0], args)
+    return _fix_batch(targets, args)
+
+
+def _fix_single(src: Path, args) -> int:
     d = diagnose(src, hash_file=False, deep=args.deep)
     print(f"diagnosis: {d.severity.value} — {'; '.join(d.notes)}")
     if d.severity in (Severity.EMPTY, Severity.UNSUPPORTED, Severity.HEADERLESS):
@@ -77,76 +154,53 @@ def cmd_fix(args) -> int:
         return 3
 
     out = Path(args.out) if args.out else src.with_name(src.stem + ".repaired" + src.suffix)
-    strategy = args.strategy
-    if strategy == "auto":
-        strategy = {
-            # salvage is trim + remux + (only when needed) dropping a junk head, so it is a
-            # strict superset of trim: same result on a clean tail, usable file when the head
-            # was overwritten.
-            Severity.MISSING_TRAILER: "salvage",
-            Severity.CORRUPT_PAYLOAD: "salvage",
-            Severity.FRAGMENTED: "flatten",
-        }.get(d.severity, "remux" if d.severity == Severity.HEALTHY else "graft")
-
-    if strategy == "trim":
-        from .trim import trim_mdat
-        trimmed = out.with_name(out.stem + ".trimmed" + out.suffix)
-        t = trim_mdat(src, trimmed)
-        if not t["ok"]:
-            print(json.dumps(t, indent=2))
-            return 1
-        ok, log = remux(trimmed, out)
-        if not ok and probe(trimmed).get("ok"):
-            result = {"ok": True, "output": str(trimmed), "note": "remux failed; trimmed copy verified instead"}
-        else:
-            trimmed.unlink(missing_ok=True)
-            result = {"ok": ok, "output": str(out) if ok else "", "log": log[-400:]}
-        result.update({"strategy": "trim", "trim": t})
-    elif strategy == "salvage":
-        from .salvage import salvage
-        result = salvage(src, out)
-        result["strategy"] = "salvage"
-    elif strategy == "remux":
-        ok, log = remux(src, out)
-        result = {"ok": ok, "strategy": "remux", "output": str(out) if ok else "", "log": log[-400:]}
-    elif strategy == "carve":
-        from .carve import carve
-        result = carve(src, out, fps=args.fps)
-    else:
-        if not args.reference:
-            # Index gone and no reference: rebuild from the payload itself (video only).
-            from .carve import carve
-            print("no --reference given: rebuilding from the raw H.264 payload instead",
-                  file=sys.stderr)
-            result = carve(src, out, fps=args.fps)
-            if not result.get("ok"):
-                print(f"carve failed: {result.get('reason')}", file=sys.stderr)
-                print(json.dumps(result, indent=2))
-                return 1
-        else:
-            ref = Path(args.reference)
-            if strategy == "flatten":
-                from .fragmented import flatten
-                result = flatten(src, ref, out, force_timescale=args.timescale)
-                result["strategy"] = "flatten"
-            else:
-                from .graft import graft
-                r = graft(src, ref, out)
-                result = {"ok": r.ok, "strategy": "graft", "output": r.output,
-                          "tracks": r.tracks, "samples": r.samples, "reason": r.reason}
-
-    if result.get("ok"):
-        result["probe"] = probe(Path(result["output"]))
-        if not args.no_verify:
-            from .ffmpeg import decode_check
-            clean, lines, first = decode_check(Path(result["output"]))
-            result["verify"] = {"ok": clean, "decode_errors": lines}
-            if not clean:
-                result["verify"]["first_error"] = first
-        result["source_untouched"] = True
+    result = _repair(src, out, args, d)
     print(json.dumps(result, indent=2))
-    verified = result.get("verify", {}).get("ok", True)
-    return 0 if result.get("ok") and result.get("probe", {}).get("ok", True) and verified else 1
+    return 0 if _result_ok(result) else 1
+
+
+def _fix_batch(targets: list[Path], args) -> int:
+    if args.out:
+        print("refusing: -o names one output file; use --out-dir for a batch", file=sys.stderr)
+        return 2
+    if not have_ffmpeg():
+        print("ffmpeg/ffprobe not found on PATH", file=sys.stderr)
+        return 3
+
+    out_dir = Path(args.out_dir) if args.out_dir else None
+    files = list(iter_media([str(t) for t in targets]))
+    repaired, failed, skipped = [], [], []
+
+    for f in files:
+        d = diagnose(f, hash_file=False, deep=args.deep)
+        if d.severity in (Severity.EMPTY, Severity.UNSUPPORTED, Severity.HEADERLESS):
+            skipped.append(f)
+            print(f"  skip    {f.name:<44} {d.severity.value}: nothing to rebuild from")
+            continue
+        if d.severity == Severity.HEALTHY and not args.force:
+            skipped.append(f)
+            print(f"  ok      {f.name:<44} healthy, left untouched")
+            continue
+
+        out = ((out_dir / (f.stem + ".repaired" + f.suffix)) if out_dir
+               else f.with_name(f.stem + ".repaired" + f.suffix))
+        result = _repair(f, out, args, d)
+        if _result_ok(result):
+            repaired.append((f, result))
+            dropped = result.get("dropped_seconds")
+            extra = f"{dropped:g}s dropped" if dropped else ""
+            print(f"  fixed   {f.name:<44} {result['strategy']:<8} {extra}")
+        else:
+            failed.append((f, result))
+            why = result.get("reason") or (
+                f"{result.get('verify', {}).get('decode_errors', 0)} decode errors in the output")
+            print(f"  FAILED  {f.name:<44} {why}")
+
+    print(f"\n{len(files)} files: {len(repaired)} repaired, {len(failed)} failed, "
+          f"{len(skipped)} skipped")
+    if out_dir:
+        print(f"output folder: {out_dir}")
+    return 1 if failed else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -172,9 +226,13 @@ def main(argv: list[str] | None = None) -> int:
                    help="folder repairs will write into (default: current directory)")
     d.set_defaults(func=cmd_doctor)
 
-    f = sub.add_parser("fix", help="repair one file into a new output file")
-    f.add_argument("file")
-    f.add_argument("-o", "--out")
+    f = sub.add_parser("fix", help="repair one file, or every damaged file in a folder")
+    f.add_argument("file", nargs="+",
+                   help="one media file, or one or more folders to repair in batch")
+    f.add_argument("-o", "--out", help="output file (single input only)")
+    f.add_argument("--out-dir", help="batch: write repaired files into this folder")
+    f.add_argument("--force", action="store_true",
+                   help="batch: also rewrite files that scan calls healthy")
     f.add_argument("--reference", help="intact file from the same device/encoder/session")
     f.add_argument("--timescale", type=int,
                    help="flatten only: force one timescale for all tracks, e.g. 90000")

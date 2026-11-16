@@ -78,7 +78,6 @@ mediarescue scan "D:/broken-file" --deep --deep-seconds 30   # quick pass, openi
 
 **2. Repair the damaged file.** Leave the strategy on `auto` — it is chosen from the scan
 result:
-
 ```bash
 mediarescue fix "D:/broken-file/clip.mp4" -o "D:/fixed/clip.mp4"
 ```
@@ -107,6 +106,22 @@ The JSON also carries `verify`: the repaired file is decoded and `decode_errors`
 repair that writes a file but leaves broken payload exits with `1`, because a playable container
 full of silence is not a fix. Add `--deep` to decode the *input* first (same check as
 `scan --deep`), or `--no-verify` to skip the check on the output.
+
+**Repairing a whole folder** works the same way — point `fix` at it. Damaged files are repaired,
+healthy ones are left untouched, and the exit code is `1` if anything failed:
+
+```bash
+mediarescue fix "D:/broken-file" --out-dir "D:/fixed"
+```
+
+```
+  fixed   big_mdat.mp4                     salvage
+  ok      holiday.mp4                      healthy, left untouched
+  skip    empty.mp4                        empty: nothing to rebuild from
+  FAILED  fragment.mp4                     the stream carries no SPS/PPS (NAL 7/8) …
+
+4 files: 1 repaired, 1 failed, 2 skipped
+```
 
 **3. Prove the repair.** `ffprobe` reads headers, so a file can look perfect and still be noise
 inside. A full decode is the real test — **silence means it worked**:

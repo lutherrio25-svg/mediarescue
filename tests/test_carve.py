@@ -100,7 +100,6 @@ def test_cli_falls_back_to_carve_when_no_reference_is_given(tmp_path, capsys):
     assert main(["fix", str(bare), "-o", str(out)]) == 0
     printed = capsys.readouterr()
     assert '"strategy": "carve"' in printed.out
-    assert "no --reference given" in printed.err
     assert probe(out)["ok"]
 
 
