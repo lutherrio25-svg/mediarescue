@@ -14,6 +14,14 @@ from mediarescue.report import Severity
 needs_ffmpeg = pytest.mark.skipif(not have_ffmpeg(), reason="ffmpeg not installed")
 
 
+def decodes_clean(path):
+    """Full decode with zero errors. ffprobe alone only reads headers and let a
+    structurally-broken flatten() result through."""
+    p = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
+                       capture_output=True, text=True)
+    return p.returncode == 0 and not p.stderr.strip(), p.stderr[-400:]
+
+
 def make_mp4(path, extra=(), duration="1"):
     subprocess.run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
@@ -89,6 +97,8 @@ def test_graft_restores_missing_moov(healthy, tmp_path):
     info = probe(out)
     assert info["ok"], info
     assert info["duration"] == pytest.approx(1.0, abs=0.3)
+    ok_decode, err = decodes_clean(out)
+    assert ok_decode, err
 
 
 @needs_ffmpeg
@@ -114,3 +124,5 @@ def test_flatten_fragmented(healthy, tmp_path):
     assert "h264" in info["streams"]
     assert "aac" in info["streams"], info  # both tracks must survive, not just video
     assert info["duration"] == pytest.approx(1.0, abs=0.3), info
+    ok_decode, err = decodes_clean(out)
+    assert ok_decode, err

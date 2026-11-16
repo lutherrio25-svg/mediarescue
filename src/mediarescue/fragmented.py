@@ -19,6 +19,7 @@ class Sample:
     size: int
     duration: int
     flags: int
+    cto: int = 0  # composition time offset (B-frame reordering), from trun flag 0x800
 
 
 @dataclass
@@ -54,6 +55,7 @@ def _tfhd(buf: bytes, box: Box) -> dict:
 def _trun(buf: bytes, box: Box, moof_offset: int, base: int | None, default_dur: int,
           default_size: int) -> tuple[list[Sample], int | None]:
     p = box.payload
+    version = buf[p]
     flags = int.from_bytes(buf[p + 1:p + 4], "big")
     count = struct.unpack_from(">I", buf, p + 4)[0]
     cur = p + 8
@@ -67,7 +69,7 @@ def _trun(buf: bytes, box: Box, moof_offset: int, base: int | None, default_dur:
     cursor = origin + data_offset if data_offset is not None else None
     samples = []
     for _ in range(count):
-        dur, size, sflags = default_dur, default_size, 0
+        dur, size, sflags, cto = default_dur, default_size, 0, 0
         if flags & 0x000100:
             dur = struct.unpack_from(">I", buf, cur)[0]
             cur += 4
@@ -78,11 +80,13 @@ def _trun(buf: bytes, box: Box, moof_offset: int, base: int | None, default_dur:
             sflags = struct.unpack_from(">I", buf, cur)[0]
             cur += 4
         if flags & 0x000800:
+            # v0 is unsigned, v1 signed (negative offsets allowed)
+            cto = struct.unpack_from(">i" if version else ">I", buf, cur)[0]
             cur += 4
         if size <= 0:
             return samples, cursor
         off = cursor if cursor is not None else 0
-        samples.append(Sample(off, size, dur, sflags))
+        samples.append(Sample(off, size, dur, sflags, cto))
         if cursor is not None:
             cursor += size
     return samples, cursor
@@ -128,6 +132,17 @@ def _runs(durations: list[int]) -> bytes:
         else:
             entries.append([1, d])
     return struct.pack(">I", len(entries)) + b"".join(struct.pack(">II", c, d) for c, d in entries)
+
+
+def _ctts_runs(offsets: list[int], signed: bool) -> bytes:
+    entries = []
+    for o in offsets:
+        if entries and entries[-1][1] == o:
+            entries[-1][0] += 1
+        else:
+            entries.append([1, o])
+    fmt = ">Ii" if signed else ">II"
+    return struct.pack(">I", len(entries)) + b"".join(struct.pack(fmt, c, o) for c, o in entries)
 
 
 def _patch_duration(trak: bytes, track_duration: int, movie_timescale: int, track_timescale: int,
@@ -204,6 +219,11 @@ def flatten(damaged: Path, reference: Path, out: Path, force_timescale: int | No
         stsz = _full(b"stsz", 0, 0, struct.pack(">II", 0, len(sizes)) +
                      b"".join(struct.pack(">I", s) for s in sizes))
         stts = _full(b"stts", 0, 0, _runs(durs))
+        ctts = b""
+        if any(s.cto for s in samples):
+            # version 1 when any offset is negative so players keep correct ordering
+            neg = any(s.cto < 0 for s in samples)
+            ctts = _full(b"ctts", 1 if neg else 0, 0, _ctts_runs([s.cto for s in samples], neg))
         stsc = _full(b"stsc", 0, 0, struct.pack(">IIII", 1, 1, len(samples), 1))
         stco = _full(b"stco", 0, 0, struct.pack(">II", 1, 0))
         non_sync = [n + 1 for n, s in enumerate(samples) if s.flags & 0x00010000]
@@ -213,14 +233,14 @@ def flatten(damaged: Path, reference: Path, out: Path, force_timescale: int | No
             stss = _full(b"stss", 0, 0, struct.pack(">I", len(sync)) +
                          b"".join(struct.pack(">I", n) for n in sync))
 
-        new_stbl = _box(b"stbl", trak[stsd.offset:stsd.end] + stts + stsc + stsz + stco + stss)
+        new_stbl = _box(b"stbl", trak[stsd.offset:stsd.end] + stts + ctts + stsc + stsz + stco + stss)
         delta = len(new_stbl) - stbl.size
+        # Locate ancestors BEFORE splicing: afterwards their declared sizes no longer
+        # match the content, so the strict walker cannot find them (shrinking case).
+        ancestors = [b for b, _ in iter_all(bytes(trak)) if b.type in ("minf", "mdia")]
         trak = trak[:stbl.offset] + new_stbl + trak[stbl.end:]
-        # Ancestor box sizes still describe the old stbl; update minf/mdia/trak.
-        for ancestor in ("minf", "mdia"):
-            abox = next((b for b, _ in iter_all(bytes(trak)) if b.type == ancestor), None)
-            if abox is not None:
-                struct.pack_into(">I", trak, abox.offset, abox.size + delta)
+        for abox in ancestors:  # offsets precede stbl, so they are unchanged
+            struct.pack_into(">I", trak, abox.offset, abox.size + delta)
         struct.pack_into(">I", trak, 0, len(trak))
         # Edit lists from the reference use its movie timescale and no longer apply.
         edts = next((b for b, depth in iter_all(bytes(trak)) if b.type == "edts" and depth == 1), None)
