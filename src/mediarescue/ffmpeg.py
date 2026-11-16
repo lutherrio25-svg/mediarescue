@@ -76,7 +76,11 @@ def decode_check(path: Path, seconds: float | None = None,
     text = (p.stderr or "").strip()
     if not text:
         return True, 0, ""
-    lines = text.splitlines()
+    # The null muxer complains about duplicate DTS on streams whose timing was rebuilt from
+    # scratch; that is a timestamp remark, not a picture that failed to decode.
+    lines = [ln for ln in text.splitlines() if not ln.lstrip().startswith("[null @")]
+    if not lines:
+        return True, 0, ""
     return False, len(lines), lines[0][:200]
 
 

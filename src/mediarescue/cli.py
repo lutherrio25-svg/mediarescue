@@ -109,21 +109,31 @@ def cmd_fix(args) -> int:
     elif strategy == "remux":
         ok, log = remux(src, out)
         result = {"ok": ok, "strategy": "remux", "output": str(out) if ok else "", "log": log[-400:]}
+    elif strategy == "carve":
+        from .carve import carve
+        result = carve(src, out, fps=args.fps)
     else:
         if not args.reference:
-            print(f"{strategy} needs --reference: an intact file from the same device/encoder",
+            # Index gone and no reference: rebuild from the payload itself (video only).
+            from .carve import carve
+            print("no --reference given: rebuilding from the raw H.264 payload instead",
                   file=sys.stderr)
-            return 2
-        ref = Path(args.reference)
-        if strategy == "flatten":
-            from .fragmented import flatten
-            result = flatten(src, ref, out, force_timescale=args.timescale)
-            result["strategy"] = "flatten"
+            result = carve(src, out, fps=args.fps)
+            if not result.get("ok"):
+                print(f"carve failed: {result.get('reason')}", file=sys.stderr)
+                print(json.dumps(result, indent=2))
+                return 1
         else:
-            from .graft import graft
-            r = graft(src, ref, out)
-            result = {"ok": r.ok, "strategy": "graft", "output": r.output,
-                      "tracks": r.tracks, "samples": r.samples, "reason": r.reason}
+            ref = Path(args.reference)
+            if strategy == "flatten":
+                from .fragmented import flatten
+                result = flatten(src, ref, out, force_timescale=args.timescale)
+                result["strategy"] = "flatten"
+            else:
+                from .graft import graft
+                r = graft(src, ref, out)
+                result = {"ok": r.ok, "strategy": "graft", "output": r.output,
+                          "tracks": r.tracks, "samples": r.samples, "reason": r.reason}
 
     if result.get("ok"):
         result["probe"] = probe(Path(result["output"]))
@@ -172,9 +182,13 @@ def main(argv: list[str] | None = None) -> int:
                    help="decode the input first: catches payload damage that headers hide")
     f.add_argument("--no-verify", action="store_true",
                    help="skip the decode check of the repaired file (it runs by default)")
-    f.add_argument("--strategy", choices=["auto", "remux", "graft", "flatten", "trim", "salvage"],
+    f.add_argument("--fps", type=float, default=25.0,
+                   help="carve only: frame rate to assume when the index is lost (default 25)")
+    f.add_argument("--strategy",
+                   choices=["auto", "remux", "graft", "flatten", "trim", "salvage", "carve"],
                    default="auto",
-                   help="salvage: trim, remux, then drop a head that was overwritten with junk")
+                   help="salvage: trim, remux, then drop a head that was overwritten with junk; "
+                        "carve: rebuild video from the raw H.264 payload without a reference")
     f.set_defaults(func=cmd_fix)
     args = ap.parse_args(argv)
     return args.func(args)

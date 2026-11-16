@@ -170,8 +170,8 @@ This is a repair tool, not a magic wand:
 | `healthy` | boxes parse, index reachable | `remux` (optional cleanup) | no |
 | `corrupt-payload` | index is perfect but the first video sample does not parse (head overwritten) | `salvage` | no |
 | `missing-trailer` | `mdat` runs past EOF, hiding a valid `moov`; truncated PNG/JPEG | `salvage` (trim, then cut a junk head) | no |
-| `fragmented` | starts at `moof`/`mdat`, init segment lost | `flatten` | yes |
-| `missing-atoms` | `ftyp`+`mdat` present, `moov` gone | `graft` | yes |
+| `fragmented` | starts at `moof`/`mdat`, init segment lost | `flatten` (or `carve` without a reference) | yes |
+| `missing-atoms` | `ftyp`+`mdat` present, `moov` gone | `graft` (or `carve` without a reference) | yes |
 | `headerless` | no parsable box, large zero regions | not repairable locally | — |
 | `empty` | 0 bytes | not repairable | — |
 
@@ -196,9 +196,21 @@ This is a repair tool, not a magic wand:
   stream-copies from that timestamp. The cut is reported, so you know exactly how much was lost
   and how much is bit-identical. Nothing is re-encoded, and the corrupt head is dropped rather
   than concealed — a frozen frame over dead data helps nobody.
+- **carve** — the last resort when the index is gone *and* there is no reference file: walk the
+  raw `mdat` for length-prefixed NAL units, rebuild an Annex-B stream and let ffmpeg write a
+  fresh index. It needs two things the file may not have: **SPS/PPS in-band** (encoders usually
+  keep them in the lost `avcC`, so streams made with `repeat-headers=1` are the ones that work)
+  and **contiguous video samples** (samples interleaved one-per-chunk cannot be delimited without
+  the index). It recovers **video only**, and the frame rate is assumed — pass `--fps` to correct
+  it. When either condition fails it says so instead of writing a file that looks fine.
 
-Force one explicitly with `--strategy trim|remux|graft|flatten|salvage`. If audio and video
+Force one explicitly with `--strategy trim|remux|graft|flatten|salvage|carve`. If audio and video
 durations still disagree after a `flatten`, give every track one clock with `--timescale 90000`.
+
+```bash
+# No index and no reference file: rebuild what the payload still holds
+mediarescue fix damaged.mp4 -o rebuilt.mp4 --strategy carve --fps 30
+```
 
 ### Honest limits
 
@@ -214,6 +226,8 @@ durations still disagree after a `flatten`, give every track one clock with `--t
   `fix --deep` applies the same check to the input.
 - AV1 keyframes are not located yet, so `salvage` on an AV1 source falls back to remuxing the
   whole file instead of cutting.
+- `carve` works only when SPS/PPS travel in-band and video samples are contiguous; it recovers
+  video without audio and assumes the frame rate. Everything else it refuses, with the reason.
 
 ### Sources
 
