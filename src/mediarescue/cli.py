@@ -36,7 +36,7 @@ def iter_media(paths: list[str]):
 def cmd_scan(args) -> int:
     rows = []
     for f in iter_media(args.paths):
-        d = diagnose(f, hash_file=args.hash)
+        d = diagnose(f, hash_file=args.hash, deep=args.deep, deep_seconds=args.deep_seconds)
         rows.append(d)
         if not args.json:
             print(f"{d.severity.value:<16} {d.size:>12,}  {'yes' if d.recoverable else 'no ':<3}  {f}")
@@ -66,7 +66,7 @@ def cmd_fix(args) -> int:
         print(f"refusing: {src} is a directory. Run `mediarescue scan \"{src}\"` to list the "
               f"damaged files, then fix them one at a time.", file=sys.stderr)
         return 2
-    d = diagnose(src, hash_file=False)
+    d = diagnose(src, hash_file=False, deep=args.deep)
     print(f"diagnosis: {d.severity.value} — {'; '.join(d.notes)}")
     if d.severity in (Severity.EMPTY, Severity.UNSUPPORTED, Severity.HEADERLESS):
         print(f"refusing: {d.severity.value} is not repairable by this tool "
@@ -127,9 +127,16 @@ def cmd_fix(args) -> int:
 
     if result.get("ok"):
         result["probe"] = probe(Path(result["output"]))
+        if not args.no_verify:
+            from .ffmpeg import decode_check
+            clean, lines, first = decode_check(Path(result["output"]))
+            result["verify"] = {"ok": clean, "decode_errors": lines}
+            if not clean:
+                result["verify"]["first_error"] = first
         result["source_untouched"] = True
     print(json.dumps(result, indent=2))
-    return 0 if result.get("ok") and result.get("probe", {}).get("ok", True) else 1
+    verified = result.get("verify", {}).get("ok", True)
+    return 0 if result.get("ok") and result.get("probe", {}).get("ok", True) and verified else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -143,6 +150,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--json", action="store_true")
     s.add_argument("--hash", action="store_true", help="sha256 every file (slow on large trees)")
     s.add_argument("--out", help="also write the full JSON report here")
+    s.add_argument("--deep", action="store_true",
+                   help="decode each file instead of only reading headers (slow, catches "
+                        "damage inside MP3/MKV/AVI and junk payloads in MP4)")
+    s.add_argument("--deep-seconds", type=float,
+                   help="with --deep: stop decoding after N seconds per file")
     s.set_defaults(func=cmd_scan)
 
     d = sub.add_parser("doctor", help="check that this machine can run a repair")
@@ -156,6 +168,10 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--reference", help="intact file from the same device/encoder/session")
     f.add_argument("--timescale", type=int,
                    help="flatten only: force one timescale for all tracks, e.g. 90000")
+    f.add_argument("--deep", action="store_true",
+                   help="decode the input first: catches payload damage that headers hide")
+    f.add_argument("--no-verify", action="store_true",
+                   help="skip the decode check of the repaired file (it runs by default)")
     f.add_argument("--strategy", choices=["auto", "remux", "graft", "flatten", "trim", "salvage"],
                    default="auto",
                    help="salvage: trim, remux, then drop a head that was overwritten with junk")

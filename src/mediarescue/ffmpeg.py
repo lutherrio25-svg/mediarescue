@@ -61,6 +61,25 @@ def cut_copy(src: Path, dst: Path, start: float, timeout: int = 1800) -> tuple[b
     return ok, (p.stderr or "")[-2000:]
 
 
+def decode_check(path: Path, seconds: float | None = None,
+                 timeout: int = 1800) -> tuple[bool, int, str]:
+    """Decode the file to nowhere. Every stderr line is a real decode error.
+
+    This is the only check that works for every container: ffprobe reads headers, and the box
+    walker only understands ISO-BMFF. Cost is proportional to duration, so callers cap it.
+    """
+    cmd = [FFMPEG, "-hide_banner", "-nostdin", "-v", "error", "-i", str(path)]
+    if seconds:
+        cmd += ["-t", f"{seconds:g}"]
+    cmd += ["-f", "null", "-"]
+    p = run(cmd, timeout)
+    text = (p.stderr or "").strip()
+    if not text:
+        return True, 0, ""
+    lines = text.splitlines()
+    return False, len(lines), lines[0][:200]
+
+
 def probe(path: Path, timeout: int = 120) -> dict:
     """Small JSON probe used to validate repaired output."""
     import json

@@ -68,6 +68,14 @@ corrupt-payload         92,464  yes  D:\broken-file\clip.mp4
 Columns: damage class, size in bytes, `yes`/`no` for repairable, path. Add `--out report.json`
 to keep the full details.
 
+That reads headers only. Add `--deep` to decode every file as well — slower, but it is the only
+way to catch damage inside MP3/MKV/AVI, or a junk payload hiding behind a perfect index:
+
+```bash
+mediarescue scan "D:/broken-file" --deep
+mediarescue scan "D:/broken-file" --deep --deep-seconds 30   # quick pass, opening 30s each
+```
+
 **2. Repair the damaged file.** Leave the strategy on `auto` — it is chosen from the scan
 result:
 
@@ -94,6 +102,11 @@ diagnosis: missing-trailer — mdat declares 26,383,400 bytes but file is 18,530
 
 Read `notes` and `dropped_seconds` — that is the honest part. If it reports 14 seconds dropped,
 your repaired video starts 14 seconds in, because that head was unreadable garbage.
+
+The JSON also carries `verify`: the repaired file is decoded and `decode_errors` must be `0`. A
+repair that writes a file but leaves broken payload exits with `1`, because a playable container
+full of silence is not a fix. Add `--deep` to decode the *input* first (same check as
+`scan --deep`), or `--no-verify` to skip the check on the output.
 
 **3. Prove the repair.** `ffprobe` reads headers, so a file can look perfect and still be noise
 inside. A full decode is the real test — **silence means it worked**:
@@ -195,9 +208,10 @@ durations still disagree after a `flatten`, give every track one clock with `--t
   require **zero** output lines.
 - `corrupt-payload` is decided by parsing the first video sample: H.264 must tile as
   length-prefixed NALs, AV1 must frame as OBUs. Anything else counts as junk.
-- Damage inside **MP3, WAV, FLAC, OGG, AAC, MKA, MKV, AVI, GIF and WEBP is not inspected**.
-  Those containers are reported as `healthy` as soon as they are readable, so a file with a
-  mangled middle still scans clean — the full decode from step 3 is the only check there.
+- Damage inside **MP3, WAV, FLAC, OGG, AAC, MKA, MKV, AVI, GIF and WEBP is not inspected by the
+  header scan**: those containers are reported as `healthy` as soon as they are readable, so a
+  file with a mangled middle still scans clean. `scan --deep` catches it by decoding, and
+  `fix --deep` applies the same check to the input.
 - AV1 keyframes are not located yet, so `salvage` on an AV1 source falls back to remuxing the
   whole file instead of cutting.
 

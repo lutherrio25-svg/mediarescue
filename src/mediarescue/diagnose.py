@@ -21,7 +21,30 @@ MEDIA_SUFFIXES = {
 MP4_SUFFIXES = {".mp4", ".m4v", ".mov", ".m4a", ".3gp"}
 
 
-def diagnose(path: str | Path, hash_file: bool = True) -> Diagnosis:
+def diagnose(path: str | Path, hash_file: bool = True, deep: bool = False,
+             deep_seconds: float | None = None) -> Diagnosis:
+    """Structural verdict, optionally proven by decoding the file (deep=True)."""
+    d = _structural(path, hash_file)
+    if not deep or d.severity in (Severity.EMPTY, Severity.UNSUPPORTED):
+        return d
+    if Path(path).suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp"):
+        return d
+    from .ffmpeg import decode_check, have_ffmpeg
+    if not have_ffmpeg():
+        d.notes.append("decode check skipped: ffmpeg not found on PATH")
+        return d
+    ok, lines, first = decode_check(Path(path), deep_seconds)
+    if ok:
+        d.notes.append("decode check: clean")
+    else:
+        d.notes.append(f"decode check: {lines} error line(s) — {first}")
+        if d.severity == Severity.HEALTHY:
+            # The index is fine but the payload is not: same class as an overwritten head.
+            d.severity = Severity.CORRUPT_PAYLOAD
+    return d
+
+
+def _structural(path: str | Path, hash_file: bool = True) -> Diagnosis:
     p = Path(path)
     if p.is_dir():
         return Diagnosis(str(p), 0, Severity.UNSUPPORTED,
