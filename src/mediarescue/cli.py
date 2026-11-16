@@ -95,18 +95,27 @@ def _pick_strategy(severity: Severity, requested: str) -> str:
     }.get(severity, "remux" if severity == Severity.HEALTHY else "graft")
 
 
-def _repair(src: Path, out: Path, args, d) -> dict:
-    """Run one strategy and verify the result. Prints nothing; returns the result dict."""
-    strategy = _pick_strategy(d.severity, args.strategy)
-
-    # Damage inside an MP3 cannot be fixed by rewriting the container; mp3val can rebuild the
-    # frame stream, so use it when it is installed and the header scan already saw damage.
+def _resolve_strategy(src: Path, d, args) -> tuple[str, str | None]:
+    """The strategy that will actually run, and the mp3val binary if one is needed."""
     from . import external
+    strategy = _pick_strategy(d.severity, args.strategy)
     mp3_damaged = (src.suffix.lower() in (".mp3", ".mp2")
                    and d.severity in (Severity.CORRUPT_PAYLOAD, Severity.MISSING_ATOMS))
     mp3val = external.mp3val_path() if mp3_damaged else None
+    # Damage inside an MP3 cannot be fixed by rewriting the container; mp3val can rebuild the
+    # frame stream, so use it when it is installed and the header scan already saw damage.
     if mp3val and args.strategy == "auto":
         strategy = "mp3val"
+    return strategy, mp3val
+
+
+def _repair(src: Path, out: Path, args, d) -> dict:
+    """Run one strategy and verify the result. Prints nothing; returns the result dict."""
+    strategy, mp3val = _resolve_strategy(src, d, args)
+    from . import external
+    mp3_damaged = mp3val is not None or (
+        src.suffix.lower() in (".mp3", ".mp2")
+        and d.severity in (Severity.CORRUPT_PAYLOAD, Severity.MISSING_ATOMS))
 
     if strategy == "mp3val":
         if mp3val is None:
@@ -230,11 +239,30 @@ def _fix_single(src: Path, args) -> int:
     out = Path(args.out) if args.out else src.with_name(src.stem + ".repaired" + src.suffix)
     if not getattr(args, "quiet", False):
         # A 300 MB repair takes minutes; say what is happening instead of going silent.
-        print(paint(f"working: {_pick_strategy(d.severity, args.strategy)} → {out.name}", "dim"),
-              file=sys.stderr)
+        chosen, _ = _resolve_strategy(src, d, args)
+        print(paint(f"working: {chosen} → {out.name}", "dim"), file=sys.stderr)
     result = _repair(src, out, args, d)
-    print(json.dumps(result, indent=2))
+    print(_brief_line(result) if args.brief else json.dumps(result, indent=2))
     return 0 if _result_ok(result) else 1
+
+
+def _brief_line(result: dict) -> str:
+    """One line for scripts and screenshots: what ran, what came out, whether it decodes."""
+    if not result.get("ok"):
+        detail = result.get("reason") or (result.get("log") or "").strip().splitlines()[-1:]
+        tail = detail if isinstance(detail, str) else " ".join(detail)
+        return f"{result.get('strategy', '?')}: failed — {tail[-200:]}"
+    probe = result.get("probe") or {}
+    verify = result.get("verify") or {}
+    parts = [f"{result.get('strategy', '?')} → {Path(result['output']).name}", "ok"]
+    if probe.get("duration"):
+        parts.append(f"{probe['duration']:.2f}s")
+    if probe.get("streams"):
+        parts.append("+".join(probe["streams"]))
+    if "decode_errors" in verify:
+        parts.append(f"decode errors {verify['decode_errors']}")
+    parts.append("source untouched")
+    return "  ".join(parts)
 
 
 def _fix_batch(targets: list[Path], args) -> int:
@@ -333,6 +361,8 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--verbose", action="store_true",
                    help="batch: print each repaired file's notes")
     f.add_argument("--no-color", action="store_true", help="never emit ANSI colour")
+    f.add_argument("--brief", action="store_true",
+                   help="one line per file instead of the full JSON report")
     f.add_argument("--reference", help="intact file from the same device/encoder/session")
     f.add_argument("--timescale", type=int,
                    help="flatten only: force one timescale for all tracks, e.g. 90000")

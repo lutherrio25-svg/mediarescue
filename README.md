@@ -8,7 +8,11 @@ wrong with a file, repairs it into a **new** file, and reports exactly what it h
 Built for the failures that actually show up on a real disk: interrupted copies, zero-filled
 heads, fragmented MP4s that lost their init segment, downloads that never finished.
 
-![mediarescue in a terminal: doctor, scan, one repair, then a whole folder](docs/terminal.png)
+![mediarescue in a terminal: scan a folder, then repair an AVI index, a damaged MP3 and a cut-off AVI](docs/terminal.png)
+
+The screenshot is a real session: `scan` on a folder holding one healthy MP4, one AVI whose
+`idx1` points at the wrong chunks, one AVI whose index was cut off, and an MP3 damaged mid-file.
+Each repair below it is the CLI's own output, unedited.
 
 ## Install
 
@@ -274,6 +278,10 @@ Format specs and prior art this tool is built on:
 - [FFmpeg formats docs](https://ffmpeg.org/ffmpeg-formats.html) and [`libavformat/mov.c`](https://github.com/FFmpeg/FFmpeg/blob/master/libavformat/mov.c) — how a real demuxer reads these boxes (and why it rejects the files here).
 - [PNG specification (W3C)](https://www.w3.org/TR/png/) — signature and `IEND` check.
 - [JPEG, ITU-T T.81 (W3C copy)](https://www.w3.org/Graphics/JPEG/itu-t81.pdf) — SOI/EOI markers.
+- [Microsoft AVI RIFF File Reference](https://learn.microsoft.com/en-us/windows/win32/directshow/avi-riff-file-reference) — `LIST movi` chunk chain, the `idx1` entry layout and what its offsets are relative to; the basis of `avi.check`.
+- [mp3val](https://mp3val.sourceforge.net/) — the MPEG frame/Xing-header validator that `fix` drives for damaged MP3s.
+- [MKVToolNix](https://mkvtoolnix.download/) — `mkvmerge`'s remux behaviour, the reference for what container rewriting can and cannot repair.
+- [DivFix++](https://www.divfix.org/) — the long-standing AVI index rebuilder; its approach is what `corrupt-index` now does internally.
 - [untrunc](https://github.com/ponchio/untrunc) — the established reference-based MP4 repair tool; `graft` follows the same idea.
 - [PhotoRec](https://www.cgsecurity.org/wiki/PhotoRec) — for carving files from a raw disk, which this tool does not do.
 

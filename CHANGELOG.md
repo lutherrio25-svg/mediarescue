@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.0
+
+Two gaps closed, and both were found by measuring rather than by reading homepages.
+
+**AVI can now be told apart from an AVI that merely plays**
+- New damage class `corrupt-index`: `idx1` is missing, or its entries do not point at the chunk
+  they name. `scan` used to call these files `healthy` — AVI needs no central index for playback,
+  because libavformat rescans `movi`, so nothing looked wrong. Measured on a fixture with every
+  entry shifted 64 bytes: 382 of 382 caught.
+- `fix` repairs it with `-fflags +ignidx`, letting the demuxer rescan and write a fresh index,
+  then verifies the result by decode *and* by re-checking every entry against its chunk. A decode
+  check alone cannot prove an AVI index is sound: sequential decoding never consults it.
+
+**Damaged MP3s are repaired, not just detected**
+- `mp3val` is used when installed (`MEDIARESCUE_MP3VAL` overrides the lookup): the file is copied,
+  `mp3val -f -nb` rebuilds the frame stream, and the copy is decode-verified. Measured on an MP3
+  with 40% of its middle overwritten: 2 decode errors before, 0 after. Without the binary the run
+  says the frames were left alone instead of implying success.
+
+**Smaller**
+- `salvage` now decides the codec per track by majority across the file. Deciding per sample let
+  junk bytes pose as an AV1 keyframe and block the cut on a damaged H.264 file.
+- Automatic reference search reaches sub-folders and one level up (40 candidates max).
+- `fix --brief`: one line per file instead of the JSON report.
+- The container image is tagged with the release version as well as `latest`.
+- `docs/related-tools.md`: what `untrunc`, `mp3val`, `DivFix++`, `mkvmerge` and PhotoRec were
+  measured to do here — including where they beat this tool and where they lose to it.
+
 ## 0.2.0
 
 Everything below was added while repairing real damaged files; each item is covered by a test.

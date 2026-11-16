@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mediarescue"
-version = "0.2.0"
+version = "0.3.0"
 description = "Diagnose and repair damaged MP4 media: six repair strategies, decode-verified output, batch mode"
 readme = "README.md"
 requires-python = ">=3.10"

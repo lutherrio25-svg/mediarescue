@@ -75,6 +75,18 @@ def test_a_lost_index_is_reported_as_repairable(tmp_path):
 
 
 @needs_ffmpeg
+def test_brief_prints_one_line_instead_of_json(tmp_path, capsys):
+    clip = tmp_path / "badidx.avi"
+    make_avi(clip)
+    shift_entries(clip)
+    out = tmp_path / "brief.avi"
+    assert main(["fix", str(clip), "-o", str(out), "--brief"]) == 0
+    last = capsys.readouterr().out.strip().splitlines()[-1]
+    assert last.startswith("remux → brief.avi")
+    assert "decode errors 0" in last and "{" not in last
+
+
+@needs_ffmpeg
 def test_fix_rewrites_a_correct_index_without_touching_the_pictures(tmp_path):
     clip = tmp_path / "badidx.avi"
     make_avi(clip)
