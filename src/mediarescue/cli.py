@@ -13,6 +13,7 @@ from .report import Severity
 SEVERITY_COLOUR = {
     Severity.HEALTHY: "green",
     Severity.CORRUPT_PAYLOAD: "yellow",
+    Severity.CORRUPT_INDEX: "yellow",
     Severity.MISSING_TRAILER: "yellow",
     Severity.FRAGMENTED: "yellow",
     Severity.MISSING_ATOMS: "yellow",
@@ -88,6 +89,9 @@ def _pick_strategy(severity: Severity, requested: str) -> str:
         Severity.MISSING_TRAILER: "salvage",
         Severity.CORRUPT_PAYLOAD: "salvage",
         Severity.FRAGMENTED: "flatten",
+        # AVI carries no sample table to rebuild; a remux that ignores idx1 and rescans movi
+        # writes a fresh index, so the index damage is the whole repair.
+        Severity.CORRUPT_INDEX: "remux",
     }.get(severity, "remux" if severity == Severity.HEALTHY else "graft")
 
 
@@ -130,7 +134,7 @@ def _repair(src: Path, out: Path, args, d) -> dict:
         from .salvage import salvage
         result = salvage(src, out)
     elif strategy == "remux":
-        ok, log = remux(src, out)
+        ok, log = remux(src, out, ignore_index=src.suffix.lower() == ".avi")
         result = {"ok": ok, "output": str(out) if ok else "", "log": log[-400:]}
     elif strategy == "carve":
         from .carve import carve

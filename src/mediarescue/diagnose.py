@@ -68,6 +68,32 @@ def _structural(path: str | Path, hash_file: bool = True) -> Diagnosis:
                          sha256=sha256_of(p) if hash_file else "")
 
     # Pure audio/MKV etc. are handed to ffmpeg as-is; structure walk is MP4-only.
+    if suffix == ".avi":
+        from .avi import check as avi_check
+        info = avi_check(p)
+        if info is None:
+            return Diagnosis(str(p), size, Severity.HEADERLESS, zero_byte_ratio=round(ratio, 4),
+                             notes=["not a RIFF/AVI file: the header is gone"],
+                             sha256=sha256_of(p) if hash_file else "")
+        if not info["has_index"]:
+            return Diagnosis(str(p), size, Severity.CORRUPT_INDEX, zero_byte_ratio=round(ratio, 4),
+                             notes=["idx1 is missing: the index was lost or the file was cut "
+                                    "short. AVI needs no reference — remux rescans movi and "
+                                    "writes a fresh index"],
+                             sha256=sha256_of(p) if hash_file else "")
+        if info["bad"]:
+            return Diagnosis(str(p), size, Severity.CORRUPT_INDEX, zero_byte_ratio=round(ratio, 4),
+                             notes=[f"{info['bad']} of {info['entries']} idx1 entries point at "
+                                    "the wrong chunk: players follow the bad index into frame "
+                                    "data, so seeks and playback break even though movi is "
+                                    "intact — remux with +ignidx rescans instead"],
+                             sha256=sha256_of(p) if hash_file else "")
+        return Diagnosis(str(p), size, Severity.HEALTHY, zero_byte_ratio=round(ratio, 4),
+                         notes=[f"RIFF/AVI index intact: {info['entries']} entries, each "
+                                "pointing at its chunk",
+                                "payload not inspected: use --deep to decode it"],
+                         sha256=sha256_of(p) if hash_file else "")
+
     if not atoms and suffix not in MP4_SUFFIXES:
         return Diagnosis(str(p), size, Severity.HEALTHY if ratio < 0.5 else Severity.MISSING_ATOMS,
                          zero_byte_ratio=ratio,

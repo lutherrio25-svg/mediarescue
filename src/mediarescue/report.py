@@ -12,6 +12,7 @@ class Severity(str, Enum):
 
     HEALTHY = "healthy"
     CORRUPT_PAYLOAD = "corrupt-payload"
+    CORRUPT_INDEX = "corrupt-index"
     MISSING_TRAILER = "missing-trailer"
     FRAGMENTED = "fragmented"
     MISSING_ATOMS = "missing-atoms"

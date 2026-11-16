@@ -63,9 +63,19 @@ non-PATH copy with `MEDIARESCUE_MP3VAL`.
 
 Rebuilds a broken AVI index (`idx1`) and strips dead sections. Windows-only, last release 2010.
 
-Verdict: **not verified here** — <https://www.divfix.org> serves no direct binary link any more,
-and the mirrors were unavailable. Treat it as a manual fallback for AVI files that will not seek;
-`mediarescue` will at least tell you the file is damaged (`scan --deep`).
+Verdict: **no longer needed for the index case.** AVI has no mandatory central index — libavformat
+rescans `movi`, so a file whose `idx1` was cut off still plays, and a header scan sees nothing
+wrong. Two index failures are worth reporting, and both are now handled here:
+
+| Fixture | `scan` before | after |
+|---|---|---|
+| `idx1` cut off with the tail (file 15% short) | `healthy` (wrong) | `corrupt-index`, repairable |
+| every `idx1` entry shifted 64 bytes, chunks intact | `healthy` (wrong) | `corrupt-index`, 382/382 entries caught |
+| `fix` on the shifted-index file | — | new index, 382/382 entries valid, 0 decode errors |
+
+The repair is `remux` with `-fflags +ignidx`: the demuxer rescans instead of trusting the index
+and writes a fresh one. `DivFix++` still has a place for AVI files whose *pictures* are damaged
+(truncated captures, broken `movi`), which is a different problem.
 
 ## MKV — `mkvmerge` (MKVToolNix)
 
@@ -92,7 +102,7 @@ not do. Use it when the file no longer exists, not when it is damaged.
 |---|---|---|
 | MP4 index lost, reference exists | `flatten` / `graft` here, `untrunc` for exotic codecs | covered, cross-checked |
 | MP3 damage | `mp3val` | **integrated** — used automatically when installed |
-| AVI index | `DivFix++` | unverified, manual fallback |
+| AVI index | `corrupt-index` + remux `+ignidx` here | **covered** — measured 382/382 entries |
 | MKV bookkeeping | `mkvmerge` | unmeasured, manual fallback |
 | AV1 head damage | `salvage` here (needs a later keyframe) | covered |
 | File deleted entirely | PhotoRec | out of scope |

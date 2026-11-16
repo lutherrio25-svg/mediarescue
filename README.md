@@ -200,6 +200,7 @@ This is a repair tool, not a magic wand:
 | `missing-trailer` | `mdat` runs past EOF, hiding a valid `moov`; truncated PNG/JPEG | `salvage` (trim, then cut a junk head) | no |
 | `fragmented` | starts at `moof`/`mdat`, init segment lost | `flatten` (or `carve` without a reference) | yes |
 | `missing-atoms` | `ftyp`+`mdat` present, `moov` gone | `graft` (or `carve` without a reference) | yes |
+| `corrupt-index` | AVI: `idx1` missing, or its entries point past the chunk they name | `remux` with `+ignidx` | no |
 | `headerless` | no parsable box, large zero regions | not repairable locally | — |
 | `empty` | 0 bytes | not repairable | — |
 

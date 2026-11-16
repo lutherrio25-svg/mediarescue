@@ -18,16 +18,21 @@ def run(cmd: list[str], timeout: int = 1800) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, errors="replace")
 
 
-def remux(src: Path, dst: Path, timeout: int = 1800) -> tuple[bool, str]:
+def remux(src: Path, dst: Path, timeout: int = 1800, ignore_index: bool = False) -> tuple[bool, str]:
     """Container-level rewrite, no re-encode. Survives a missing/truncated moov
-    only when the stream is otherwise indexable; used for the cheap wins."""
+    only when the stream is otherwise indexable; used for the cheap wins.
+
+    `ignore_index` makes the demuxer rescan instead of trusting the file's index — the fix for an
+    AVI whose `idx1` points at the wrong offsets, where trusting it reads frames from the middle.
+    """
     if dst.exists():
         dst = dst.with_name(dst.stem + "-1" + dst.suffix)
     dst.parent.mkdir(parents=True, exist_ok=True)
+    flags = "+genpts+igndts+discardcorrupt" + ("+ignidx" if ignore_index else "")
     cmd = [
         FFMPEG, "-hide_banner", "-nostdin", "-y",
         "-err_detect", "ignore_err",
-        "-fflags", "+genpts+igndts+discardcorrupt",
+        "-fflags", flags,
         "-i", str(src),
         "-map", "0", "-c", "copy",
         "-movflags", "+faststart",

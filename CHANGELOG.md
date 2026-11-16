@@ -30,6 +30,10 @@ Everything below was added while repairing real damaged files; each item is cove
   container full of silence is not a repair.
 - MP3 damage is repaired with `mp3val` when it is installed (optional backend, `MEDIARESCUE_MP3VAL`
   overrides the lookup); without it the run reports that the frames were left alone.
+- `corrupt-index` (AVI): `idx1` missing, or its entries point at the wrong chunk. `scan` used to
+  call these files `healthy` — AVI needs no central index for playback, so nothing looked wrong.
+  `fix` now remuxes with `-fflags +ignidx`, letting the demuxer rescan `movi` and write a fresh
+  index; verified by decode, and by re-checking every entry against its chunk.
 - `docs/related-tools.md` records what `untrunc`, `mp3val`, `DivFix++`, `mkvmerge` and PhotoRec
   were measured to do against this tool's gaps.
 
