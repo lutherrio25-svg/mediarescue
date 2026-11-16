@@ -15,7 +15,7 @@ import struct
 import tempfile
 from pathlib import Path
 
-from .ffmpeg import decode_check, probe, run
+from .ffmpeg import FFMPEG, decode_check, probe, run
 
 NAL_TYPES = set(range(1, 13))  # 1-5 slices, 6 SEI, 7 SPS, 8 PPS, 9 AUD, 10-12 end of seq/stream
 # A NAL header is 1 byte: forbidden_zero_bit clear, nal_ref_idc any, type 1..12.
@@ -146,6 +146,11 @@ def carve(src: Path, out: Path, fps: float = 25.0, timeout: int = 1800) -> dict:
     clean, lines, first = decode_check(out)
     notes.append("video only: audio frames carry no delimiters once the index is gone, so "
                  "they cannot be carved")
+    timing = sum(1 for ln in (run([FFMPEG, "-v", "error", "-i", str(out), "-f", "null", "-"])
+                              .stderr or "").splitlines() if "[null @" in ln)
+    if timing:
+        notes.append(f"rebuilt timeline: {timing} duplicate-timestamp remark(s); a player may "
+                     f"skip one frame at that point")
     if not clean:
         notes.append(f"decode check: {lines} error line(s) — {first}")
         notes.append("samples are probably interleaved one-per-chunk; carving cannot delimit "
