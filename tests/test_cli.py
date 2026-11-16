@@ -30,3 +30,18 @@ def test_diagnose_on_a_directory_is_unsupported(tmp_path):
     d = diagnose(tmp_path, hash_file=False)
     assert d.severity == Severity.UNSUPPORTED
     assert "directory" in d.notes[0]
+
+
+def test_fix_and_scan_refuse_a_path_that_does_not_exist(tmp_path, capsys):
+    """Silently doing nothing and exiting 0 is the worst possible answer."""
+    ghost = str(tmp_path / "tidak-ada.mp4")
+    assert main(["fix", ghost]) == 2
+    assert "not found" in capsys.readouterr().err
+
+    assert main(["scan", ghost]) == 2
+    assert "not found" in capsys.readouterr().err
+
+
+def test_scan_of_an_empty_folder_is_not_an_error(tmp_path, capsys):
+    assert main(["scan", str(tmp_path)]) == 0
+    assert "0 scanned" in capsys.readouterr().out

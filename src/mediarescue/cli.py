@@ -46,6 +46,11 @@ def iter_media(paths: list[str]):
 
 def cmd_scan(args) -> int:
     rows = []
+    missing = [p for p in args.paths if not Path(p).exists()]
+    if missing:
+        for m in missing:
+            print(f"not found: {m}", file=sys.stderr)
+        return 2
     paint = ui.colour_for(ui.enabled(override=False if args.no_color else None))
     for f in iter_media(args.paths):
         d = diagnose(f, hash_file=args.hash, deep=args.deep, deep_seconds=args.deep_seconds)
@@ -174,6 +179,11 @@ def _result_ok(result: dict) -> bool:
 
 def cmd_fix(args) -> int:
     targets = [Path(p) for p in args.file]
+    missing = [t for t in targets if not t.exists()]
+    if missing:
+        for m in missing:
+            print(f"not found: {m}", file=sys.stderr)
+        return 2
     if len(targets) == 1 and targets[0].is_file():
         return _fix_single(targets[0], args)
     return _fix_batch(targets, args)
