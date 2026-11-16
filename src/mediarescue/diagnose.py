@@ -23,6 +23,9 @@ MP4_SUFFIXES = {".mp4", ".m4v", ".mov", ".m4a", ".3gp"}
 
 def diagnose(path: str | Path, hash_file: bool = True) -> Diagnosis:
     p = Path(path)
+    if p.is_dir():
+        return Diagnosis(str(p), 0, Severity.UNSUPPORTED,
+                         notes=["directory, not a file: scan its contents instead"])
     size = p.stat().st_size if p.exists() else 0
     if size == 0:
         return Diagnosis(str(p), 0, Severity.EMPTY, notes=["0 bytes: no payload to rebuild from"])
@@ -45,7 +48,9 @@ def diagnose(path: str | Path, hash_file: bool = True) -> Diagnosis:
     if not atoms and suffix not in MP4_SUFFIXES:
         return Diagnosis(str(p), size, Severity.HEALTHY if ratio < 0.5 else Severity.MISSING_ATOMS,
                          zero_byte_ratio=ratio,
-                         notes=["non ISO-BMFF container; use ffmpeg remux/transcode"])
+                         notes=["non ISO-BMFF container; use ffmpeg remux/transcode",
+                                "payload not inspected: damage inside this format is not "
+                                "detected — verify with a full decode"])
 
     types = {a.type for a in atoms}
     notes: list[str] = []

@@ -62,6 +62,10 @@ def cmd_doctor(args) -> int:
 
 def cmd_fix(args) -> int:
     src = Path(args.file)
+    if src.is_dir():
+        print(f"refusing: {src} is a directory. Run `mediarescue scan \"{src}\"` to list the "
+              f"damaged files, then fix them one at a time.", file=sys.stderr)
+        return 2
     d = diagnose(src, hash_file=False)
     print(f"diagnosis: {d.severity.value} — {'; '.join(d.notes)}")
     if d.severity in (Severity.EMPTY, Severity.UNSUPPORTED, Severity.HEADERLESS):

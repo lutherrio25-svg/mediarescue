@@ -195,6 +195,9 @@ durations still disagree after a `flatten`, give every track one clock with `--t
   require **zero** output lines.
 - `corrupt-payload` is decided by parsing the first video sample: H.264 must tile as
   length-prefixed NALs, AV1 must frame as OBUs. Anything else counts as junk.
+- Damage inside **MP3, WAV, FLAC, OGG, AAC, MKA, MKV, AVI, GIF and WEBP is not inspected**.
+  Those containers are reported as `healthy` as soon as they are readable, so a file with a
+  mangled middle still scans clean — the full decode from step 3 is the only check there.
 - AV1 keyframes are not located yet, so `salvage` on an AV1 source falls back to remuxing the
   whole file instead of cutting.
 
