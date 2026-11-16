@@ -112,3 +112,5 @@ def test_flatten_fragmented(healthy, tmp_path):
     info = probe(out)
     assert info["ok"], info
     assert "h264" in info["streams"]
+    assert "aac" in info["streams"], info  # both tracks must survive, not just video
+    assert info["duration"] == pytest.approx(1.0, abs=0.3), info

@@ -98,7 +98,7 @@ def cmd_fix(args) -> int:
         ref = Path(args.reference)
         if strategy == "flatten":
             from .fragmented import flatten
-            result = flatten(src, ref, out)
+            result = flatten(src, ref, out, force_timescale=args.timescale)
             result["strategy"] = "flatten"
         else:
             from .graft import graft
@@ -130,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("file")
     f.add_argument("-o", "--out")
     f.add_argument("--reference", help="intact file from the same device/encoder/session")
+    f.add_argument("--timescale", type=int,
+                   help="flatten only: force one timescale for all tracks, e.g. 90000")
     f.add_argument("--strategy", choices=["auto", "remux", "graft", "flatten", "trim"], default="auto")
     f.set_defaults(func=cmd_fix)
     args = ap.parse_args(argv)

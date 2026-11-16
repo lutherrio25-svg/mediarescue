@@ -27,6 +27,9 @@ mediarescue fix broken.mp4 -o fixed.mp4
 # Missing moov / fragmented files need an intact file from the same device or encoder
 mediarescue fix dash-segment.mp4 --reference intact-from-same-camera.mp4 -o fixed.mp4
 
+# If the reconstructed audio/video durations disagree, the source used a single clock
+mediarescue fix dash-segment.mp4 --reference intact.mp4 --timescale 90000 -o fixed.mp4
+
 # Force a strategy
 mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten
 ```

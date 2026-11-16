@@ -130,19 +130,28 @@ def _runs(durations: list[int]) -> bytes:
     return struct.pack(">I", len(entries)) + b"".join(struct.pack(">II", c, d) for c, d in entries)
 
 
-def _patch_duration(trak: bytes, track_duration: int, movie_timescale: int, track_timescale: int) -> bytes:
+def _patch_duration(trak: bytes, track_duration: int, movie_timescale: int, track_timescale: int,
+                    set_timescale: int | None = None) -> bytes:
     b = bytearray(trak)
     for box, _ in iter_all(bytes(b)):
         if box.type == "mdhd":
+            if set_timescale:
+                struct.pack_into(">I", b, box.payload + 12, set_timescale)
             struct.pack_into(">I", b, box.payload + 16, track_duration)
         elif box.type == "tkhd":
-            struct.pack_into(">I", b, box.payload + 20,
-                             int(track_duration * movie_timescale / max(track_timescale, 1)))
+            value = min(0xFFFFFFFF, int(track_duration * movie_timescale / max(track_timescale, 1)))
+            struct.pack_into(">I", b, box.payload + 20, value)
     return bytes(b)
 
 
-def flatten(damaged: Path, reference: Path, out: Path) -> dict:
-    """Returns a result dict; never overwrites the input."""
+def flatten(damaged: Path, reference: Path, out: Path, force_timescale: int | None = None) -> dict:
+    """Returns a result dict; never overwrites the input.
+
+    force_timescale: force one timescale for every track. Fragmented encoders
+    often use a single clock (e.g. 90000) for audio and video alike, while the
+    reference file may use 44100 for audio — that mismatch doubles the audio
+    duration, so an explicit override is sometimes required.
+    """
     buf = damaged.read_bytes()
     ref = reference.read_bytes()
     tracks = parse_fragments(buf)
@@ -165,12 +174,13 @@ def flatten(damaged: Path, reference: Path, out: Path) -> dict:
     ref_mvhd = find(ref, "mvhd", start=ref_moov.payload, end=ref_moov.end)
     if not ref_traks or ref_mvhd is None:
         return {"ok": False, "reason": "reference lacks trak/mvhd"}
-    movie_timescale = struct.unpack_from(">I", ref, ref_mvhd.payload + 12)[0]
+    movie_timescale = 1000  # normalised: inheriting odd reference scales can overflow tkhd
 
     r_ftyp = next((b for b in read_boxes(ref) if b.type == "ftyp"), None)
     ftyp = ref[r_ftyp.offset:r_ftyp.end] if r_ftyp else _box(b"ftyp", b"isom" + struct.pack(">I", 512) + b"isomiso2")
 
     new_traks, payloads, stco_positions = [], [], []
+    movie_durations = []
     for i, frag in enumerate(in_bounds):
         if i >= len(ref_traks):
             break
@@ -180,7 +190,8 @@ def flatten(damaged: Path, reference: Path, out: Path) -> dict:
         stbl, mdhd, stsd = nested.get("stbl"), nested.get("mdhd"), nested.get("stsd")
         if stbl is None or mdhd is None:
             return {"ok": False, "reason": "reference trak lacks stbl/mdhd"}
-        timescale = struct.unpack_from(">I", trak, mdhd.payload + 12)[0]
+        ref_timescale = struct.unpack_from(">I", trak, mdhd.payload + 12)[0]
+        timescale = force_timescale or ref_timescale
         if stsd is None:
             return {"ok": False, "reason": "reference has no stsd codec description"}
 
@@ -203,8 +214,22 @@ def flatten(damaged: Path, reference: Path, out: Path) -> dict:
                          b"".join(struct.pack(">I", n) for n in sync))
 
         new_stbl = _box(b"stbl", trak[stsd.offset:stsd.end] + stts + stsc + stsz + stco + stss)
+        delta = len(new_stbl) - stbl.size
         trak = trak[:stbl.offset] + new_stbl + trak[stbl.end:]
-        trak = bytearray(_patch_duration(bytes(trak), sum(durs), movie_timescale, timescale))
+        # Ancestor box sizes still describe the old stbl; update minf/mdia/trak.
+        for ancestor in ("minf", "mdia"):
+            abox = next((b for b, _ in iter_all(bytes(trak)) if b.type == ancestor), None)
+            if abox is not None:
+                struct.pack_into(">I", trak, abox.offset, abox.size + delta)
+        struct.pack_into(">I", trak, 0, len(trak))
+        # Edit lists from the reference use its movie timescale and no longer apply.
+        edts = next((b for b, depth in iter_all(bytes(trak)) if b.type == "edts" and depth == 1), None)
+        if edts is not None:
+            trak = trak[:edts.offset] + trak[edts.end:]
+            struct.pack_into(">I", trak, 0, len(trak))
+        trak = bytearray(_patch_duration(bytes(trak), sum(durs), movie_timescale, timescale,
+                                         set_timescale=timescale))
+        movie_durations.append(min(0xFFFFFFFF, int(sum(durs) * movie_timescale / max(timescale, 1))))
         # record absolute position of the stco value for the second pass
         for box, _ in iter_all(bytes(trak)):
             if box.type == "stco":
@@ -215,8 +240,8 @@ def flatten(damaged: Path, reference: Path, out: Path) -> dict:
         return {"ok": False, "reason": "no tracks could be mapped to the reference"}
 
     mvhd = bytearray(ref[ref_mvhd.offset:ref_mvhd.end])
-    longest = max(int(sum(s.duration for s in t.samples)) for t in in_bounds[:len(new_traks)])
-    struct.pack_into(">I", mvhd, ref_mvhd.header + 16, longest)
+    struct.pack_into(">I", mvhd, ref_mvhd.header + 12, movie_timescale)
+    struct.pack_into(">I", mvhd, ref_mvhd.header + 16, max(movie_durations))
     moov = bytearray(_box(b"moov", bytes(mvhd) + b"".join(new_traks)))
 
     mdat_payload = len(ftyp) + len(moov) + 8
@@ -234,6 +259,13 @@ def flatten(damaged: Path, reference: Path, out: Path) -> dict:
         f.write(struct.pack(">I4s", offset - mdat_payload + 8, b"mdat"))
         for payload in payloads:
             f.write(payload)
-    return {"ok": True, "output": str(out), "tracks": len(new_traks),
-            "samples": sum(len(t.samples) for t in in_bounds[:len(new_traks)]),
-            "dropped_samples": dropped}
+    result = {"ok": True, "output": str(out), "tracks": len(new_traks),
+              "samples": sum(len(t.samples) for t in in_bounds[:len(new_traks)]),
+              "dropped_samples": dropped,
+              "track_seconds": [round(d / movie_timescale, 2) for d in movie_durations]}
+    if len(movie_durations) > 1 and min(movie_durations) > 0:
+        if max(movie_durations) / min(movie_durations) > 1.05:
+            result["warning"] = ("track durations disagree; the reference timescale probably "
+                                 "differs from the fragmented source — rerun with --timescale "
+                                 "(90000 is common for fMP4)")
+    return result
