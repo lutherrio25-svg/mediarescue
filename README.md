@@ -27,7 +27,7 @@ mediarescue fix broken.mp4 -o fixed.mp4
 # Missing moov / fragmented files need an intact file from the same device or encoder
 mediarescue fix dash-segment.mp4 --reference intact-from-same-camera.mp4 -o fixed.mp4
 
-# If the reconstructed audio/video durations disagree, the source used a single clock
+# If audio and video durations still disagree, force one clock for every track
 mediarescue fix dash-segment.mp4 --reference intact.mp4 --timescale 90000 -o fixed.mp4
 
 # Force a strategy
@@ -53,10 +53,13 @@ mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten
 - **graft** — keep the damaged `mdat`, graft the reference `moov`, rewrite every
   `stco`/`co64` chunk offset by the position delta. Refuses on overflow or when the
   reference has no usable sample table.
-- **flatten** — parse `tfhd`/`trun` from every fragment, rebuild `stts`/`stsc`/`stsz`/
-  `stco`/`stss`, and emit a normal non-fragmented MP4 using the reference's codec
-  description (`stsd`/`avcC`/`esds`). Samples past EOF from a truncated final fragment
-  are dropped and counted, not fatal.
+- **flatten** — parse `tfhd`/`trun` from every fragment, rebuild `stts`/`ctts`/`stsc`/`stsz`/
+  `stco`/`stss`, and emit a normal non-fragmented MP4. The codec is sniffed from the sample
+  bytes: **AV1** gets an `av01`/`av1C` entry built from the stream's own sequence header (no
+  reference codec is borrowed); **H.264** reuses the reference's `avcC`, and a reference with
+  a different video codec is refused instead of producing garbage. Audio timescale is inferred
+  from sample durations. Samples past EOF from a truncated final fragment are dropped and
+  counted, not fatal.
 
 ## Honest limits
 
