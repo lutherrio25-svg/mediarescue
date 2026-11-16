@@ -275,7 +275,8 @@ Format specs and prior art this tool is built on:
 
 ```bash
 pip install -e .[dev]
-python -m pytest        # fixtures are generated with ffmpeg; those tests skip without it
+python -m pytest                    # fixtures are generated with ffmpeg; those tests skip without it
+python scripts/acceptance_check.py  # drives an installed CLI end to end, exit codes included
 ```
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed between versions.
