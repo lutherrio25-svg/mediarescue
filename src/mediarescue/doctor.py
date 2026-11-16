@@ -102,23 +102,25 @@ def run_checks(workdir: Path | None = None) -> list[Check]:
     return checks
 
 
-def report(checks: list[Check]) -> str:
+def report(checks: list[Check], colour: bool = False) -> str:
+    from .ui import paint
+
     width = max(len(c.name) for c in checks)
     lines = [f"mediarescue {__version__} — doctor", ""]
     for c in checks:
-        mark = "ok  " if c.ok else "FAIL"
+        mark = paint("ok  ", "green", colour) if c.ok else paint("FAIL", "red", colour)
         lines.append(f"  {mark}  {c.name.ljust(width)}  {c.detail}")
         if not c.ok and c.hint:
-            lines.append(f"        {' ' * width}  -> {c.hint}")
+            lines.append(f"        {' ' * width}  {paint('-> ' + c.hint, 'dim', colour)}")
     failed = [c for c in checks if not c.ok]
     lines.append("")
     if failed:
-        lines.append(f"not ready: {len(failed)} of {len(checks)} checks failed")
+        lines.append(paint(f"not ready: {len(failed)} of {len(checks)} checks failed", "red", colour))
     else:
-        lines.append("ready: everything this tool needs is present")
+        lines.append(paint("ready: everything this tool needs is present", "green", colour))
     return "\n".join(lines)
 
 
-def doctor(workdir: Path | None = None) -> tuple[int, str]:
+def doctor(workdir: Path | None = None, colour: bool = False) -> tuple[int, str]:
     checks = run_checks(workdir)
-    return (0 if all(c.ok for c in checks) else 1), report(checks)
+    return (0 if all(c.ok for c in checks) else 1), report(checks, colour)

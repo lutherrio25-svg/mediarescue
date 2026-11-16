@@ -34,6 +34,8 @@ Everything below was added while repairing real damaged files; each item is cove
 - `doctor`: one command that checks Python, ffmpeg, ffprobe, write access and free space, and
   prints the fix for anything missing.
 - `fix --deep` / `--no-verify`, `--fps` for `carve`, `--force` for batch.
+- Colour on a terminal, plain text when piped (`NO_COLOR` / `FORCE_COLOR` / `--no-color`),
+  `--quiet` and `--verbose` for batch, and a per-file `[n/total]` counter.
 - README rewritten as a three-step quick start with real output, a symptom-to-command table and a
   plain-language `--reference` section.
 

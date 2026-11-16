@@ -8,6 +8,8 @@ wrong with a file, repairs it into a **new** file, and reports exactly what it h
 Built for the failures that actually show up on a real disk: interrupted copies, zero-filled
 heads, fragmented MP4s that lost their init segment, downloads that never finished.
 
+![mediarescue in a terminal: doctor, scan, one repair, then a whole folder](docs/terminal.png)
+
 ## Install
 
 ```bash

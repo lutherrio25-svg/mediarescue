@@ -5,10 +5,21 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__
+from . import __version__, ui
 from .diagnose import MEDIA_SUFFIXES, diagnose
 from .ffmpeg import have_ffmpeg, probe, remux
 from .report import Severity
+
+SEVERITY_COLOUR = {
+    Severity.HEALTHY: "green",
+    Severity.CORRUPT_PAYLOAD: "yellow",
+    Severity.MISSING_TRAILER: "yellow",
+    Severity.FRAGMENTED: "yellow",
+    Severity.MISSING_ATOMS: "yellow",
+    Severity.HEADERLESS: "red",
+    Severity.EMPTY: "red",
+    Severity.UNSUPPORTED: "red",
+}
 
 SKIP_DIRS = {
     "windows", "program files", "program files (x86)", "programdata", "$recycle.bin",
@@ -35,11 +46,13 @@ def iter_media(paths: list[str]):
 
 def cmd_scan(args) -> int:
     rows = []
+    paint = ui.colour_for(ui.enabled(override=False if args.no_color else None))
     for f in iter_media(args.paths):
         d = diagnose(f, hash_file=args.hash, deep=args.deep, deep_seconds=args.deep_seconds)
         rows.append(d)
         if not args.json:
-            print(f"{d.severity.value:<16} {d.size:>12,}  {'yes' if d.recoverable else 'no ':<3}  {f}")
+            label = paint(f"{d.severity.value:<16}", SEVERITY_COLOUR.get(d.severity, ""))
+            print(f"{label} {d.size:>12,}  {'yes' if d.recoverable else 'no ':<3}  {f}")
     if args.json:
         print(json.dumps([d.to_dict() for d in rows], indent=2))
     if args.out:
@@ -55,7 +68,8 @@ def cmd_scan(args) -> int:
 
 def cmd_doctor(args) -> int:
     from .doctor import doctor
-    code, text = doctor(Path(args.workdir) if args.workdir else None)
+    colour = ui.enabled(override=False if getattr(args, "no_color", False) else None)
+    code, text = doctor(Path(args.workdir) if args.workdir else None, colour=colour)
     print(text)
     return code
 
@@ -166,8 +180,10 @@ def cmd_fix(args) -> int:
 
 
 def _fix_single(src: Path, args) -> int:
+    paint = ui.colour_for(ui.enabled(override=False if getattr(args, "no_color", False) else None))
     d = diagnose(src, hash_file=False, deep=args.deep)
-    print(f"diagnosis: {d.severity.value} — {'; '.join(d.notes)}")
+    label = paint(d.severity.value, SEVERITY_COLOUR.get(d.severity, ""))
+    print(f"diagnosis: {label} — {'; '.join(d.notes)}")
     if d.severity in (Severity.EMPTY, Severity.UNSUPPORTED, Severity.HEADERLESS):
         print(f"refusing: {d.severity.value} is not repairable by this tool "
               f"(no stream payload to rebuild from)", file=sys.stderr)
@@ -177,6 +193,10 @@ def _fix_single(src: Path, args) -> int:
         return 3
 
     out = Path(args.out) if args.out else src.with_name(src.stem + ".repaired" + src.suffix)
+    if not getattr(args, "quiet", False):
+        # A 300 MB repair takes minutes; say what is happening instead of going silent.
+        print(paint(f"working: {_pick_strategy(d.severity, args.strategy)} → {out.name}", "dim"),
+              file=sys.stderr)
     result = _repair(src, out, args, d)
     print(json.dumps(result, indent=2))
     return 0 if _result_ok(result) else 1
@@ -190,39 +210,54 @@ def _fix_batch(targets: list[Path], args) -> int:
         print("ffmpeg/ffprobe not found on PATH", file=sys.stderr)
         return 3
 
+    paint = ui.colour_for(ui.enabled(override=False if getattr(args, "no_color", False) else None))
     out_dir = Path(args.out_dir) if args.out_dir else None
     files = list(iter_media([str(t) for t in targets]))
     repaired, failed, skipped = [], [], []
+    total = len(files)
 
-    for f in files:
+    for index, f in enumerate(files, 1):
+        counter = paint(f"[{index}/{total}]".ljust(9), "dim")
         d = diagnose(f, hash_file=False, deep=args.deep)
         if d.severity in (Severity.EMPTY, Severity.UNSUPPORTED, Severity.HEADERLESS):
             skipped.append(f)
-            print(f"  skip    {f.name:<44} {d.severity.value}: nothing to rebuild from")
+            if not args.quiet:
+                print(f"  {counter} {paint('skip  ', 'dim')} {f.name:<44} "
+                      f"{d.severity.value}: nothing to rebuild from")
             continue
         if d.severity == Severity.HEALTHY and not args.force:
             skipped.append(f)
-            print(f"  ok      {f.name:<44} healthy, left untouched")
+            if not args.quiet:
+                print(f"  {counter} {paint('ok    ', 'green')} {f.name:<44} healthy, left untouched")
             continue
 
         out = ((out_dir / (f.stem + ".repaired" + f.suffix)) if out_dir
                else f.with_name(f.stem + ".repaired" + f.suffix))
+        if not args.quiet and sys.stdout.isatty():
+            # Only on a real terminal: a carriage-return progress line is noise in a log file.
+            print(f"  {counter} {paint('work  ', 'cyan')} {f.name:<44} repairing…", end="\r")
         result = _repair(f, out, args, d)
         if _result_ok(result):
             repaired.append((f, result))
             dropped = result.get("dropped_seconds")
-            extra = f"{dropped:g}s dropped" if dropped else ""
-            print(f"  fixed   {f.name:<44} {result['strategy']:<8} {extra}")
+            extra = paint(f"{dropped:g}s dropped", "yellow") if dropped else ""
+            if not args.quiet:
+                print(f"  {counter} {paint('fixed ', 'green')} {f.name:<44} "
+                      f"{result['strategy']:<8} {extra}")
+            if args.verbose:
+                for note in result.get("notes", []):
+                    print(paint(f"            {note}", "dim"))
         else:
             failed.append((f, result))
             why = result.get("reason") or (
                 f"{result.get('verify', {}).get('decode_errors', 0)} decode errors in the output")
-            print(f"  FAILED  {f.name:<44} {why}")
+            print(f"  {counter} {paint('FAILED', 'red')} {f.name:<44} {paint(why, 'red')}")
 
-    print(f"\n{len(files)} files: {len(repaired)} repaired, {len(failed)} failed, "
-          f"{len(skipped)} skipped")
+    summary = (f"{total} files: {len(repaired)} repaired, {len(failed)} failed, "
+               f"{len(skipped)} skipped")
+    print("\n" + (paint(summary, "red") if failed else paint(summary, "green")))
     if out_dir:
-        print(f"output folder: {out_dir}")
+        print(paint(f"output folder: {out_dir}", "dim"))
     return 1 if failed else 0
 
 
@@ -242,11 +277,13 @@ def main(argv: list[str] | None = None) -> int:
                         "damage inside MP3/MKV/AVI and junk payloads in MP4)")
     s.add_argument("--deep-seconds", type=float,
                    help="with --deep: stop decoding after N seconds per file")
+    s.add_argument("--no-color", action="store_true", help="never emit ANSI colour")
     s.set_defaults(func=cmd_scan)
 
     d = sub.add_parser("doctor", help="check that this machine can run a repair")
     d.add_argument("--workdir",
                    help="folder repairs will write into (default: current directory)")
+    d.add_argument("--no-color", action="store_true", help="never emit ANSI colour")
     d.set_defaults(func=cmd_doctor)
 
     f = sub.add_parser("fix", help="repair one file, or every damaged file in a folder")
@@ -256,6 +293,11 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--out-dir", help="batch: write repaired files into this folder")
     f.add_argument("--force", action="store_true",
                    help="batch: also rewrite files that scan calls healthy")
+    f.add_argument("--quiet", action="store_true",
+                   help="print only failures and the summary")
+    f.add_argument("--verbose", action="store_true",
+                   help="batch: print each repaired file's notes")
+    f.add_argument("--no-color", action="store_true", help="never emit ANSI colour")
     f.add_argument("--reference", help="intact file from the same device/encoder/session")
     f.add_argument("--timescale", type=int,
                    help="flatten only: force one timescale for all tracks, e.g. 90000")
