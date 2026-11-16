@@ -1,5 +1,9 @@
 # mediarescue
 
+[![container](https://img.shields.io/badge/ghcr.io-mediarescue%3A0.3.0-2496ed?logo=docker&logoColor=white)](https://github.com/lutherrio25-svg/mediarescue/pkgs/container/mediarescue)
+[![release](https://img.shields.io/github/v/release/lutherrio25-svg/mediarescue?label=release)](https://github.com/lutherrio25-svg/mediarescue/releases)
+[![tests](https://github.com/lutherrio25-svg/mediarescue/actions/workflows/tests.yml/badge.svg)](https://github.com/lutherrio25-svg/mediarescue/actions/workflows/tests.yml)
+
 Diagnose and repair damaged audio/video files from the command line. It tells you what is
 wrong with a file, repairs it into a **new** file, and reports exactly what it had to give up.
 
