@@ -235,6 +235,7 @@ def flatten(damaged: Path, reference: Path, out: Path, force_timescale: int | No
     movie_durations = []
     notes: list[str] = []
     used_ref: set[int] = set()
+    video_codecs: set[str] = set()
 
     def ref_handler(rt: Box) -> bytes:
         h = next((b for b, _ in iter_all(ref, rt.offset + 8, rt.end) if b.type == "hdlr"), None)
@@ -245,6 +246,8 @@ def flatten(damaged: Path, reference: Path, out: Path, force_timescale: int | No
         probe = [buf[s.offset:s.offset + s.size] for s in frag.samples[:200:4]]
         codec = sniff_video_codec(probe)
         want = b"vide" if codec != "unknown" else b"soun"
+        if codec != "unknown":
+            video_codecs.add(codec)
         idx = next((k for k, rt in enumerate(ref_traks)
                     if k not in used_ref and ref_handler(rt) == want), None)
         if idx is None:
@@ -343,6 +346,12 @@ def flatten(damaged: Path, reference: Path, out: Path, force_timescale: int | No
 
     if not new_traks:
         return {"ok": False, "reason": "no tracks could be mapped to the reference"}
+
+    if "av1" in video_codecs:
+        # Never advertise the reference's brand: a player that trusts `avc1` here will pick
+        # the H.264 decoder and render the AV1 bitstream as noise.
+        ftyp = _box(b"ftyp", b"isom" + struct.pack(">I", 512) + b"isomiso2av01mp41")
+        notes.append("ftyp brands rewritten to isom/iso2/av01/mp41 (source is AV1)")
 
     mvhd = bytearray(ref[ref_mvhd.offset:ref_mvhd.end])
     struct.pack_into(">I", mvhd, ref_mvhd.header + 12, movie_timescale)
