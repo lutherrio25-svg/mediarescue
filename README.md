@@ -19,7 +19,7 @@ pip install -e .          # Python 3.10+, no runtime dependencies
 
 ```bash
 # Classify everything under a directory (system/cache dirs are skipped)
-mediarescue scan D:/file-rusak --out report.json
+mediarescue scan D:/broken-file --out report.json
 
 # One file, automatic strategy
 mediarescue fix broken.mp4 -o fixed.mp4
