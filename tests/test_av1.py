@@ -39,3 +39,11 @@ def test_av1_sequence_header_roundtrip(tmp_path):
     assert (info["width"], info["height"]) == (160, 96)
     stsd = build_av01_stsd(info, seq_obu)
     assert stsd[4:8] == b"stsd" and b"av01" in stsd and b"av1C" in stsd
+
+
+def test_encoder_tag_detected_but_real_aac_frames_are_not():
+    from mediarescue.fragmented import looks_like_encoder_tag
+    blob = bytes.fromhex("de0200") + b"Lavc61.33.102\x00B \x08\xc1\x188"
+    assert looks_like_encoder_tag(blob)
+    assert not looks_like_encoder_tag(b"\x21\x10\x04\x60\x8c\x1c" * 4)   # AAC frames
+    assert not looks_like_encoder_tag(b"Lavc")                            # too short

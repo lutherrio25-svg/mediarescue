@@ -161,6 +161,17 @@ def infer_timescale(samples: list, handler: bytes, ref_timescale: int) -> int:
     return ref_timescale
 
 
+def looks_like_encoder_tag(d: bytes) -> bool:
+    """True for the 'Lavc<version>' blob some muxers park in front of the first audio sample.
+
+    It is text, not a frame, so handing it to a decoder produces one bad frame and a click.
+    """
+    if len(d) < 16 or b"Lavc" not in d:
+        return False
+    printable = sum(1 for c in d if 32 <= c < 127)
+    return printable * 2 >= len(d)
+
+
 def _runs(durations: list[int]) -> bytes:
     entries = []
     for d in durations:
@@ -265,7 +276,16 @@ def flatten(damaged: Path, reference: Path, out: Path, force_timescale: int | No
         if stsd is None:
             return {"ok": False, "reason": "reference has no stsd codec description"}
 
-        samples = frag.samples
+        samples = list(frag.samples)
+        if want == b"soun" and samples:
+            head = buf[samples[0].offset:samples[0].offset + min(samples[0].size, 64)]
+            if looks_like_encoder_tag(head):
+                tag = head[3:19].decode("latin1", "replace").rstrip("\x00")
+                notes.append(f"track {frag.track_id}: dropped leading {samples[0].size}-byte encoder "
+                             f"tag {tag!r} sitting in front of the first audio frame")
+                samples = samples[1:]
+                if not samples:
+                    return {"ok": False, "reason": "audio track held only an encoder tag"}
         stsd_bytes = bytes(trak[stsd.offset:stsd.end])
         if want == b"vide":
             ref_entry = bytes(trak[stsd.payload + 12:stsd.payload + 16])
