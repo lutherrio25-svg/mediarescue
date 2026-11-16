@@ -133,18 +133,32 @@ def first_clean_keyframe(buf) -> dict | None:
         table = sample_table(buf, trak)
         if not table or table["handler"] != b"vide" or not table["timescale"]:
             continue
-        t, junk = 0.0, 0
-        for index, sample in enumerate(table["samples"]):
-            data = buf[sample["offset"]:sample["offset"] + sample["size"]]
-            # Decide per sample, not once from sample 0: a corrupt head must not be able to
-            # hide which codec the rest of the file is.
-            types = nal_types(data)
-            if types is not None:
-                clean, codec = 5 in types, "h264"
+        samples = table["samples"]
+
+        # Decide the codec by majority, sampling across the whole track. Deciding per sample
+        # lets a junk head masquerade as the other codec: random bytes can parse as an AV1
+        # KEY_FRAME by luck, and then the real H.264 stream is never cut.
+        step = max(1, len(samples) // 200)
+        votes = {"h264": 0, "av1": 0}
+        for i in range(0, len(samples), step):
+            data = buf[samples[i]["offset"]:samples[i]["offset"] + samples[i]["size"]]
+            if nal_types(data) is not None:
+                votes["h264"] += 1
             elif is_av1_sample(data):
-                clean, codec = av1_is_keyframe(data), "av1"
+                votes["av1"] += 1
+        codec = "av1" if votes["av1"] > votes["h264"] else "h264"
+
+        t, junk = 0.0, 0
+        for index, sample in enumerate(samples):
+            data = buf[sample["offset"]:sample["offset"] + sample["size"]]
+            if codec == "av1":
+                parsed = is_av1_sample(data)
+                clean = parsed and av1_is_keyframe(data)
             else:
-                clean, codec = False, None
+                types = nal_types(data)
+                parsed = types is not None
+                clean = bool(parsed and 5 in (types or []))
+            if not parsed:
                 junk += 1
             if clean:
                 return {"time": t, "index": index, "dropped": junk,
