@@ -280,6 +280,8 @@ python -m pytest                    # fixtures are generated with ffmpeg; those 
 python scripts/acceptance_check.py  # drives an installed CLI end to end, exit codes included
 ```
 
-See [CHANGELOG.md](CHANGELOG.md) for what changed between versions.
+See [CHANGELOG.md](CHANGELOG.md) for what changed between versions, and
+[docs/related-tools.md](docs/related-tools.md) for the other repair tools that were measured
+against this one — including the gaps they cover better.
 
 MIT licensed.
