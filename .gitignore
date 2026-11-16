@@ -8,3 +8,4 @@ dist/
 *.repaired.*
 *.trimmed.*
 report.json
+.release-notes-*.md
