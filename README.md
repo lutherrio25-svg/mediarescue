@@ -67,6 +67,19 @@ mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten
 - Audio in partially recovered files may still contain decode errors where payload was lost.
 - Not a carve-from-raw-disk tool (use PhotoRec for that); this works on existing files.
 
+## Sources
+
+Format specs and prior art this tool is built on:
+
+- **ISO Base Media File Format** (ISO/IEC 14496-12) and **CMAF** (ISO/IEC 23000-19) — box layout, `moof`/`traf`/`trun` fragments. Paid standards, no free link.
+- [Apple QuickTime File Format](https://developer.apple.com/documentation/quicktime-file-format) — free reference for `moov`, `stbl`, `stco`/`co64`, `stsz`, `stts`, `edts`.
+- [MP4 Registration Authority](https://mp4ra.org/) — registered box and codec identifiers.
+- [FFmpeg formats docs](https://ffmpeg.org/ffmpeg-formats.html) and [`libavformat/mov.c`](https://github.com/FFmpeg/FFmpeg/blob/master/libavformat/mov.c) — how a real demuxer reads these boxes (and why it rejects the files here).
+- [PNG specification (W3C)](https://www.w3.org/TR/png/) — signature and `IEND` check.
+- [JPEG, ITU-T T.81 (W3C copy)](https://www.w3.org/Graphics/JPEG/itu-t81.pdf) — SOI/EOI markers.
+- [untrunc](https://github.com/ponchio/untrunc) — the established reference-based MP4 repair tool; `graft` follows the same idea.
+- [PhotoRec](https://www.cgsecurity.org/wiki/PhotoRec) — for carving files from a raw disk, which this tool does not do.
+
 ## Development
 
 ```bash
