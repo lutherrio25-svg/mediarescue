@@ -26,6 +26,12 @@ Requires Python 3.10+ and `ffmpeg` + `ffprobe` on your `PATH`:
 Confirm with `ffmpeg -version` and `mediarescue --version`. If ffmpeg lives somewhere unusual,
 point at it with `MEDIARESCUE_FFMPEG` / `MEDIARESCUE_FFPROBE`.
 
+No Python on the machine? The published container already has ffmpeg inside:
+
+```bash
+docker run --rm -v "D:/broken:/media" ghcr.io/lutherrio25-svg/mediarescue:latest scan /media
+```
+
 Or just ask the tool itself:
 
 ```bash
