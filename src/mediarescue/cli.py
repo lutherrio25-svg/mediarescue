@@ -95,7 +95,24 @@ def _repair(src: Path, out: Path, args, d) -> dict:
     """Run one strategy and verify the result. Prints nothing; returns the result dict."""
     strategy = _pick_strategy(d.severity, args.strategy)
 
-    if strategy == "trim":
+    # Damage inside an MP3 cannot be fixed by rewriting the container; mp3val can rebuild the
+    # frame stream, so use it when it is installed and the header scan already saw damage.
+    from . import external
+    mp3_damaged = (src.suffix.lower() in (".mp3", ".mp2")
+                   and d.severity in (Severity.CORRUPT_PAYLOAD, Severity.MISSING_ATOMS))
+    mp3val = external.mp3val_path() if mp3_damaged else None
+    if mp3val and args.strategy == "auto":
+        strategy = "mp3val"
+
+    if strategy == "mp3val":
+        if mp3val is None:
+            result = {"ok": False, "reason": "mp3val was found a moment ago but is gone now"}
+        else:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(src.read_bytes())
+            ok, log = external.run_mp3val(mp3val, out)
+            result = {"ok": ok, "output": str(out) if ok else "", "log": log, "tool": "mp3val"}
+    elif strategy == "trim":
         from .trim import trim_mdat
         trimmed = out.with_name(out.stem + ".trimmed" + out.suffix)
         t = trim_mdat(src, trimmed)
@@ -158,6 +175,10 @@ def _repair(src: Path, out: Path, args, d) -> dict:
             result = {"ok": r.ok, "output": r.output, "tracks": r.tracks,
                       "samples": r.samples, "reason": r.reason}
     result.setdefault("strategy", strategy)
+    if mp3_damaged and mp3val is None:
+        result.setdefault("notes", []).append(
+            "mp3val is not installed: damaged MPEG frames inside were left alone "
+            "(set MEDIARESCUE_MP3VAL or put mp3val on PATH)")
 
     if result.get("ok"):
         result["probe"] = probe(Path(result["output"]))

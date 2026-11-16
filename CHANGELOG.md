@@ -28,6 +28,10 @@ Everything below was added while repairing real damaged files; each item is cove
 - Leading `Lavc…` encoder-tag blobs parked as audio sample 0 are dropped instead of decoded.
 - `fix` decodes its own output and exits `1` when the payload is still broken — a playable
   container full of silence is not a repair.
+- MP3 damage is repaired with `mp3val` when it is installed (optional backend, `MEDIARESCUE_MP3VAL`
+  overrides the lookup); without it the run reports that the frames were left alone.
+- `docs/related-tools.md` records what `untrunc`, `mp3val`, `DivFix++`, `mkvmerge` and PhotoRec
+  were measured to do against this tool's gaps.
 
 **Interface**
 - `fix` accepts folders and several paths: batch mode repairs damaged files, leaves healthy ones

@@ -46,8 +46,18 @@ after:   0 decode error lines, file rebuilt
 ```
 
 Verdict: this is the one tool that closes a gap `mediarescue` openly has — damage inside MP3 is
-detected by `scan --deep` but not repaired. Integration is a small, well-defined job: run
-`mp3val` on a copy, then decode-verify the result. Not wired in yet.
+detected by `scan --deep` but cannot be repaired by rewriting the container.
+
+**Now wired in.** `fix --deep damaged.mp3 -o fixed.mp3` runs `mp3val -f -nb` on a copy and then
+decode-verifies the result. Measured end to end on the fixture above:
+
+```
+strategy: mp3val     duration 1.798 s     decode errors 0     exit 0
+```
+
+It is optional: without the binary the run still happens, the notes say
+`mp3val is not installed`, and the exit code reflects that the damage is still there. Point at a
+non-PATH copy with `MEDIARESCUE_MP3VAL`.
 
 ## AVI index rebuild — `DivFix++`
 
@@ -81,7 +91,7 @@ not do. Use it when the file no longer exists, not when it is damaged.
 | Gap | Best tool | Status |
 |---|---|---|
 | MP4 index lost, reference exists | `flatten` / `graft` here, `untrunc` for exotic codecs | covered, cross-checked |
-| MP3 damage | `mp3val` | **gap — integration pending** |
+| MP3 damage | `mp3val` | **integrated** — used automatically when installed |
 | AVI index | `DivFix++` | unverified, manual fallback |
 | MKV bookkeeping | `mkvmerge` | unmeasured, manual fallback |
 | AV1 head damage | `salvage` here (needs a later keyframe) | covered |

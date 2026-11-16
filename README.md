@@ -34,6 +34,10 @@ No Python on the machine? The published container already has ffmpeg inside:
 docker run --rm -v "D:/broken:/media" ghcr.io/lutherrio25-svg/mediarescue:latest scan /media
 ```
 
+Optional extra: put [`mp3val`](https://mp3val.sourceforge.net) on `PATH` (or set
+`MEDIARESCUE_MP3VAL`) and `fix` will rebuild damaged MP3 frame streams instead of only
+rewriting the container. Without it the tool still runs and says the damage was left alone.
+
 Or just ask the tool itself:
 
 ```bash
