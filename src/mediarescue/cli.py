@@ -87,6 +87,10 @@ def cmd_fix(args) -> int:
             trimmed.unlink(missing_ok=True)
             result = {"ok": ok, "output": str(out) if ok else "", "log": log[-400:]}
         result.update({"strategy": "trim", "trim": t})
+    elif strategy == "salvage":
+        from .salvage import salvage
+        result = salvage(src, out)
+        result["strategy"] = "salvage"
     elif strategy == "remux":
         ok, log = remux(src, out)
         result = {"ok": ok, "strategy": "remux", "output": str(out) if ok else "", "log": log[-400:]}
@@ -132,7 +136,9 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--reference", help="intact file from the same device/encoder/session")
     f.add_argument("--timescale", type=int,
                    help="flatten only: force one timescale for all tracks, e.g. 90000")
-    f.add_argument("--strategy", choices=["auto", "remux", "graft", "flatten", "trim"], default="auto")
+    f.add_argument("--strategy", choices=["auto", "remux", "graft", "flatten", "trim", "salvage"],
+                   default="auto",
+                   help="salvage: trim, remux, then drop a head that was overwritten with junk")
     f.set_defaults(func=cmd_fix)
     args = ap.parse_args(argv)
     return args.func(args)

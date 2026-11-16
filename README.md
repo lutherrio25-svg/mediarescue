@@ -30,8 +30,11 @@ mediarescue fix dash-segment.mp4 --reference intact-from-same-camera.mp4 -o fixe
 # If audio and video durations still disagree, force one clock for every track
 mediarescue fix dash-segment.mp4 --reference intact.mp4 --timescale 90000 -o fixed.mp4
 
+# Head replaced by junk: keep the clean tail and report what had to go
+mediarescue fix truncated.mp4 --strategy salvage -o recovered.mp4
+
 # Force a strategy
-mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten
+mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten|salvage
 ```
 
 ## Damage classes
@@ -60,6 +63,12 @@ mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten
   a different video codec is refused instead of producing garbage. Audio timescale is inferred
   from sample durations. Samples past EOF from a truncated final fragment are dropped and
   counted, not fatal.
+- **salvage** — for a file whose *head* was overwritten (a resume that landed at the wrong
+  offset, a copy that mixed two files). Trims an oversized `mdat`, then walks the sample table
+  to find the first video sample that parses as length-prefixed NALs containing an IDR, and
+  stream-copies from that timestamp. The cut is reported, so you know exactly how much was
+  lost and how much is bit-identical. Nothing is re-encoded, and the corrupt head is dropped
+  rather than concealed — a frozen frame over dead data helps nobody.
 
 ## Honest limits
 

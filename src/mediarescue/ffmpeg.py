@@ -40,6 +40,27 @@ def remux(src: Path, dst: Path, timeout: int = 1800) -> tuple[bool, str]:
     return ok, (p.stderr or "")[-2000:]
 
 
+def cut_copy(src: Path, dst: Path, start: float, timeout: int = 1800) -> tuple[bool, str]:
+    """Lossless stream copy beginning at `start` seconds, used to drop an unrecoverable head."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        FFMPEG, "-hide_banner", "-nostdin", "-y",
+        "-i", str(src),
+        # -ss AFTER -i: ffmpeg then drops every packet that starts before the cut.
+        # With input seeking it keeps ~2s of the corrupt head on the audio stream.
+        "-ss", f"{start:.3f}",
+        "-map", "0", "-c", "copy",
+        "-avoid_negative_ts", "make_zero",
+        "-movflags", "+faststart",
+        str(dst),
+    ]
+    p = run(cmd, timeout)
+    ok = p.returncode == 0 and dst.exists() and dst.stat().st_size > 0
+    if not ok:
+        dst.unlink(missing_ok=True)
+    return ok, (p.stderr or "")[-2000:]
+
+
 def probe(path: Path, timeout: int = 120) -> dict:
     """Small JSON probe used to validate repaired output."""
     import json
