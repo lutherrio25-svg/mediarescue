@@ -93,10 +93,12 @@ def test_carve_refuses_when_sps_pps_lived_in_the_index(tmp_path):
 def test_cli_falls_back_to_carve_when_no_reference_is_given(tmp_path, capsys):
     good = tmp_path / "good.mp4"
     make_clip(good, audio=False)
-    bare = tmp_path / "bare.mp4"
+    lonely = tmp_path / "lonely"          # no siblings, so nothing can be auto-picked
+    lonely.mkdir()
+    bare = lonely / "bare.mp4"
     strip_index(good, bare)
 
-    out = tmp_path / "rebuilt.mp4"
+    out = lonely / "rebuilt.mp4"
     assert main(["fix", str(bare), "-o", str(out)]) == 0
     printed = capsys.readouterr()
     assert '"strategy": "carve"' in printed.out

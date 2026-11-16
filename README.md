@@ -163,8 +163,9 @@ What counts as a good reference:
   of producing garbage
 - it does not have to be the same video — anything that opens and plays normally will do
 
-No reference anywhere? Those two classes cannot be rebuilt. Try `--strategy salvage` anyway: if
-the damage sits only in the head, you still get the clean remainder.
+No reference anywhere? The tool looks for one itself: a healthy file **in the same folder** whose
+video codec matches is picked automatically, and the choice is reported in the output
+(`"reference": "…"`). Only when that fails does it fall back to `--strategy carve`.
 
 ## When it cannot be fixed
 
@@ -243,6 +244,8 @@ mediarescue fix damaged.mp4 -o rebuilt.mp4 --strategy carve --fps 30
   whole file instead of cutting.
 - `carve` works only when SPS/PPS travel in-band and video samples are contiguous; it recovers
   video without audio and assumes the frame rate. Everything else it refuses, with the reason.
+- Automatic reference selection looks at the **same folder only** (first 40 media files, not
+  recursive). Point `--reference` explicitly when the intact file lives elsewhere.
 
 ### Sources
 

@@ -99,6 +99,29 @@ def _repair(src: Path, out: Path, args, d) -> dict:
     elif strategy == "carve":
         from .carve import carve
         result = carve(src, out, fps=args.fps)
+    elif strategy in ("flatten", "graft") and not args.reference:
+        # No --reference: look for a healthy sibling with the same codec before giving up on
+        # the index entirely and falling back to carve.
+        from .reference import find_reference
+        auto = find_reference(src)
+        if auto is None:
+            from .carve import carve
+            result = carve(src, out, fps=args.fps)
+            if not result.get("ok"):
+                result["note"] = ("no --reference given and no matching sibling found, so "
+                                  "carve was tried instead")
+        elif strategy == "flatten":
+            from .fragmented import flatten
+            result = flatten(src, auto, out, force_timescale=args.timescale)
+            result.setdefault("notes", []).append(f"reference picked automatically: {auto.name}")
+            result["reference"] = str(auto)
+        else:
+            from .graft import graft
+            r = graft(src, auto, out)
+            result = {"ok": r.ok, "output": r.output, "tracks": r.tracks,
+                      "samples": r.samples, "reason": r.reason,
+                      "reference": str(auto),
+                      "notes": [f"reference picked automatically: {auto.name}"]}
     elif not args.reference:
         # Index gone and no reference: rebuild from the payload itself (video only).
         from .carve import carve
