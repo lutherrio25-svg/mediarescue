@@ -1,7 +1,9 @@
 # mediarescue
 
 Diagnose and repair damaged audio/video files. **Originals are never modified** — every
-repair writes a new file and then validates it with `ffprobe`.
+repair writes a new file and then checks it with `ffprobe`. Treat that probe as a smoke test
+only: a container can parse perfectly while the frames inside are garbage, so the real proof
+is a full decode (see *Honest limits*).
 
 Built for the failures that actually show up on a real disk: interrupted copies,
 zero-filled heads, fragmented MP4s that lost their init segment, 0-byte downloads.
@@ -10,6 +12,9 @@ zero-filled heads, fragmented MP4s that lost their init segment, 0-byte download
 
 ```bash
 pip install -e .          # Python 3.10+, no runtime dependencies
+
+# or straight from GitHub
+pip install "git+https://github.com/lutherrio25-svg/mediarescue.git"
 ```
 
 `ffmpeg` + `ffprobe` must be on `PATH` for repair and validation
@@ -42,7 +47,7 @@ mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten|salvage
 | Severity | Meaning | Strategy | Needs reference |
 |---|---|---|---|
 | `healthy` | boxes parse, index reachable | `remux` (optional cleanup) | no |
-| `missing-trailer` | `mdat` runs past EOF, hiding a valid `moov`; truncated PNG/JPEG | `trim` | no |
+| `missing-trailer` | `mdat` runs past EOF, hiding a valid `moov`; truncated PNG/JPEG | `salvage` (trim, then cut a junk head) | no |
 | `fragmented` | starts at `moof`/`mdat`, init segment lost | `flatten` | yes |
 | `missing-atoms` | `ftyp`+`mdat` present, `moov` gone | `graft` | yes |
 | `headerless` | no parsable box, large zero regions | not repairable locally | — |
@@ -74,6 +79,13 @@ mediarescue fix broken.mp4 --strategy trim|remux|graft|flatten|salvage
 
 - A reference must match the recording's codec configuration; a wrong one yields a file
   that probes fine but decodes wrong. Always eyeball the result.
+- `ffprobe` reads headers, not pictures. Prove a repair with a full decode and require
+  **zero** output lines:
+  ```bash
+  ffmpeg -v error -i fixed.mp4 -f null -      # silence = the frames really decode
+  ```
+- `salvage` reports `dropped_seconds` instead of hiding the damage: an overwritten head is
+  cut away, never concealed with silence and frozen frames.
 - Zero-filled or overwritten `mdat` regions are gone for good. No tool can invent frames;
   re-download or restore from backup for those.
 - Audio in partially recovered files may still contain decode errors where payload was lost.
