@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mediarescue"
-version = "0.1.0"
-description = "Forensic-safe diagnosis and repair toolkit for damaged MP4/MP3/JPEG/PNG media"
+version = "0.2.0"
+description = "Diagnose and repair damaged MP4 media: six repair strategies, decode-verified output, batch mode"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "lutherrio25-svg" }]
-keywords = ["video-repair", "mp4", "moov", "fragmented", "data-recovery", "ffmpeg"]
+keywords = ["video-repair", "mp4", "moov", "fragmented", "data-recovery", "ffmpeg",
+            "av1", "h264", "salvage", "carve"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",

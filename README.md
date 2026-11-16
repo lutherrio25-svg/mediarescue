@@ -33,7 +33,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.1.0 — doctor
+mediarescue 0.2.0 — doctor
 
   ok    python        3.13.5
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e
@@ -252,8 +252,11 @@ mediarescue fix damaged.mp4 -o rebuilt.mp4 --strategy carve --fps 30
 Format specs and prior art this tool is built on:
 
 - **ISO Base Media File Format** (ISO/IEC 14496-12) and **CMAF** (ISO/IEC 23000-19) — box layout, `moof`/`traf`/`trun` fragments. Paid standards, no free link.
+- [AOMedia AV1 Bitstream & Decoding Process Specification](https://aomediacodec.github.io/av1-spec/) — OBU framing (section 5.5), sequence-header parsing and the `av1C` fields `flatten` writes.
+- [ITU-T H.264 (free copy)](https://www.itu.int/rec/T-REC-H.264) — NAL unit types, IDR frames, SPS/PPS, and the length-prefixed sample layout `carve` walks.
+- **ISO/IEC 14496-3** — AAC `AudioSpecificConfig` carried inside `esds`. Paid standard, no free link.
 - [Apple QuickTime File Format](https://developer.apple.com/documentation/quicktime-file-format) — free reference for `moov`, `stbl`, `stco`/`co64`, `stsz`, `stts`, `edts`.
-- [MP4 Registration Authority](https://mp4ra.org/) — registered box and codec identifiers.
+- [MP4 Registration Authority](https://mp4ra.org/) — registered box, codec and `ftyp` brand identifiers.
 - [FFmpeg formats docs](https://ffmpeg.org/ffmpeg-formats.html) and [`libavformat/mov.c`](https://github.com/FFmpeg/FFmpeg/blob/master/libavformat/mov.c) — how a real demuxer reads these boxes (and why it rejects the files here).
 - [PNG specification (W3C)](https://www.w3.org/TR/png/) — signature and `IEND` check.
 - [JPEG, ITU-T T.81 (W3C copy)](https://www.w3.org/Graphics/JPEG/itu-t81.pdf) — SOI/EOI markers.
@@ -266,5 +269,7 @@ Format specs and prior art this tool is built on:
 pip install -e .[dev]
 python -m pytest        # fixtures are generated with ffmpeg; those tests skip without it
 ```
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed between versions.
 
 MIT licensed.
