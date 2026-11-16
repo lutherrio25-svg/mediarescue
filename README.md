@@ -26,6 +26,28 @@ Requires Python 3.10+ and `ffmpeg` + `ffprobe` on your `PATH`:
 Confirm with `ffmpeg -version` and `mediarescue --version`. If ffmpeg lives somewhere unusual,
 point at it with `MEDIARESCUE_FFMPEG` / `MEDIARESCUE_FFPROBE`.
 
+Or just ask the tool itself:
+
+```bash
+mediarescue doctor
+```
+
+```
+mediarescue 0.1.0 — doctor
+
+  ok    python        3.13.5
+  ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e
+  ok    ffprobe       ffprobe version N-127043-g5a54fcf75e
+  ok    write access  D:\videos
+  ok    disk space    43.3 GB free
+
+ready: everything this tool needs is present
+```
+
+Anything missing is printed as `FAIL` together with the command that fixes it, and the exit
+code is 1. It checks the folder repairs will write into — pass `--workdir D:/fixed` if that is
+not the one you are standing in.
+
 ## Quick start
 
 Three commands, in order.

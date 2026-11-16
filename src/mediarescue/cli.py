@@ -53,6 +53,13 @@ def cmd_scan(args) -> int:
     return 0
 
 
+def cmd_doctor(args) -> int:
+    from .doctor import doctor
+    code, text = doctor(Path(args.workdir) if args.workdir else None)
+    print(text)
+    return code
+
+
 def cmd_fix(args) -> int:
     src = Path(args.file)
     d = diagnose(src, hash_file=False)
@@ -133,6 +140,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--hash", action="store_true", help="sha256 every file (slow on large trees)")
     s.add_argument("--out", help="also write the full JSON report here")
     s.set_defaults(func=cmd_scan)
+
+    d = sub.add_parser("doctor", help="check that this machine can run a repair")
+    d.add_argument("--workdir",
+                   help="folder repairs will write into (default: current directory)")
+    d.set_defaults(func=cmd_doctor)
 
     f = sub.add_parser("fix", help="repair one file into a new output file")
     f.add_argument("file")
