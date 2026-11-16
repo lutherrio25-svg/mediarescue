@@ -102,10 +102,13 @@ def build_fixtures(work: Path) -> Path:
     (work / "empty.mp4").write_bytes(b"")
     video_only = work / "video_only.mp4"
     make_clip(video_only, audio=False)
-    (work / "lonely").mkdir(exist_ok=True)
-    bare_payload(video_only, work / "lonely" / "bare.mp4")
-    (work / "interleaved").mkdir(exist_ok=True)
-    bare_payload(good, work / "interleaved" / "bare.mp4")
+    # Keep the bare-payload fixtures away from every other media file: with reference search
+    # reaching one level up, a sibling would be auto-picked and carve would never run.
+    carve_root = work.parent / "carve"
+    (carve_root / "lonely").mkdir(parents=True, exist_ok=True)
+    bare_payload(video_only, carve_root / "lonely" / "bare.mp4")
+    (carve_root / "interleaved").mkdir(exist_ok=True)
+    bare_payload(good, carve_root / "interleaved" / "bare.mp4")
     mp3 = work / "audio.mp3"
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
                     "-i", "sine=frequency=440:sample_rate=44100", "-t", "3",
@@ -235,7 +238,7 @@ def main() -> int:
 
     def carve_ok():
         out = work / "o_carve.mp4"
-        p, data = jrun("fix", str(work / "lonely" / "bare.mp4"), "-o", str(out))
+        p, data = jrun("fix", str(work.parent / "carve" / "lonely" / "bare.mp4"), "-o", str(out))
         assert p.returncode == 0, p.stdout[-400:]
         assert data["strategy"] == "carve" and data["verify"]["decode_errors"] == 0
         assert decode_errors(out) == 0
@@ -243,7 +246,8 @@ def main() -> int:
     check("carve succeeds", carve_ok)
 
     def carve_refuse():
-        p = run(cli, "fix", str(work / "interleaved" / "bare.mp4"), "-o", str(work / "x2.mp4"))
+        p = run(cli, "fix", str(work.parent / "carve" / "interleaved" / "bare.mp4"),
+                "-o", str(work / "x2.mp4"))
         assert p.returncode == 1 and "reference" in p.stdout + p.stderr
         return "refused with a reason"
     check("carve refuses interleaved", carve_refuse)
