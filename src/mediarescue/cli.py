@@ -109,6 +109,28 @@ def _resolve_strategy(src: Path, d, args) -> tuple[str, str | None]:
     return strategy, mp3val
 
 
+def _carve_or_explain(src: Path, out: Path, fps: float, why: str) -> dict:
+    """Last resort when no reference exists: rebuild from the payload, or say precisely why not.
+
+    `carve` only understands H.264. Handing it an AV1 file made it "find" a bogus H.264 stream in
+    AV1 bytes and fail with an SPS/PPS complaint that names the wrong codec and points nowhere.
+    """
+    from .reference import source_video_codec
+    codec = source_video_codec(src)
+    if codec == "av1":
+        return {"ok": False, "strategy": "carve",
+                "reason": ("AV1 stream with no index. Its audio configuration lived in the lost "
+                           "index, so a --reference file is needed: any intact MP4 whose audio "
+                           "was encoded the same way (same device, app or download source). "
+                           "It does not have to be AV1."),
+                "notes": [why]}
+    from .carve import carve
+    result = carve(src, out, fps=fps)
+    if not result.get("ok"):
+        result["note"] = why
+    return result
+
+
 def _repair(src: Path, out: Path, args, d) -> dict:
     """Run one strategy and verify the result. Prints nothing; returns the result dict."""
     strategy, mp3val = _resolve_strategy(src, d, args)
@@ -146,19 +168,15 @@ def _repair(src: Path, out: Path, args, d) -> dict:
         ok, log = remux(src, out, ignore_index=src.suffix.lower() == ".avi")
         result = {"ok": ok, "output": str(out) if ok else "", "log": log[-400:]}
     elif strategy == "carve":
-        from .carve import carve
-        result = carve(src, out, fps=args.fps)
+        result = _carve_or_explain(src, out, args.fps, "carve requested explicitly")
     elif strategy in ("flatten", "graft") and not args.reference:
         # No --reference: look for a healthy sibling with the same codec before giving up on
         # the index entirely and falling back to carve.
         from .reference import find_reference
         auto = find_reference(src)
         if auto is None:
-            from .carve import carve
-            result = carve(src, out, fps=args.fps)
-            if not result.get("ok"):
-                result["note"] = ("no --reference given and no matching sibling found, so "
-                                  "carve was tried instead")
+            result = _carve_or_explain(src, out, args.fps,
+                                       "no --reference given and no matching sibling found")
         elif strategy == "flatten":
             from .fragmented import flatten
             result = flatten(src, auto, out, force_timescale=args.timescale)
@@ -173,10 +191,7 @@ def _repair(src: Path, out: Path, args, d) -> dict:
                       "notes": [f"reference picked automatically: {auto.name}"]}
     elif not args.reference:
         # Index gone and no reference: rebuild from the payload itself (video only).
-        from .carve import carve
-        result = carve(src, out, fps=args.fps)
-        if not result.get("ok"):
-            result["note"] = "no --reference given, so carve was tried instead"
+        result = _carve_or_explain(src, out, args.fps, "no --reference given")
     else:
         ref = Path(args.reference)
         if strategy == "flatten":
@@ -249,9 +264,13 @@ def _fix_single(src: Path, args) -> int:
 def _brief_line(result: dict) -> str:
     """One line for scripts and screenshots: what ran, what came out, whether it decodes."""
     if not result.get("ok"):
-        detail = result.get("reason") or (result.get("log") or "").strip().splitlines()[-1:]
-        tail = detail if isinstance(detail, str) else " ".join(detail)
-        return f"{result.get('strategy', '?')}: failed — {tail[-200:]}"
+        # A stated reason is short and the cause comes first; a raw ffmpeg log is the opposite,
+        # its useful line is the last one.
+        reason = result.get("reason")
+        if reason:
+            return f"{result.get('strategy', '?')}: failed — {reason}"
+        lines = (result.get("log") or "").strip().splitlines()
+        return f"{result.get('strategy', '?')}: failed — {lines[-1][-200:] if lines else 'no detail'}"
     probe = result.get("probe") or {}
     verify = result.get("verify") or {}
     parts = [f"{result.get('strategy', '?')} → {Path(result['output']).name}", "ok"]
