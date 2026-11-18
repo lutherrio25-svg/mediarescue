@@ -59,8 +59,10 @@ def is_avc_sample(d: bytes, length_size: int = 4) -> bool:
     return o == len(d) and n > 0
 
 
-def sniff_video_codec(samples_bytes: list[bytes]) -> str:
+def sniff_video_codec(samples_bytes: list[bytes] | bytes) -> str:
     """'av1', 'h264' or 'unknown' — decided by majority over the given samples."""
+    if isinstance(samples_bytes, (bytes, bytearray, memoryview)):
+        samples_bytes = [bytes(samples_bytes)]
     probe = [d for d in samples_bytes if len(d) > 8]
     if not probe:
         return "unknown"

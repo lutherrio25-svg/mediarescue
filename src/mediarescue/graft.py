@@ -68,6 +68,9 @@ def graft(damaged: Path, reference: Path, out: Path) -> GraftResult:
         base = box.payload  # offsets from iter_all(moov) are already moov-relative
         count = struct.unpack_from(">I", moov, base + 4)[0]
         width = 8 if kind == "co64" else 4
+        if count > max(0, (box.end - base - 8) // width):
+            return GraftResult(False, reason=f"reference {kind} claims {count} entries but the "
+                                             "box holds fewer")
         for i in range(count):
             pos = base + 8 + i * width
             old = struct.unpack_from(">Q" if width == 8 else ">I", moov, pos)[0]

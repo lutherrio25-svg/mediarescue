@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.1
+
+Found by fuzzing — damaging seven file types ten ways each and feeding random bytes to every
+parser (8,820 parser calls) — rather than by waiting for a user to hit it.
+
+**Fixed**
+- A file whose `stsz` claimed 4 billion samples made `scan` and `fix` crash with a traceback
+  (`struct.error`), or would have tried to allocate a multi-gigabyte list. Every count in a sample
+  table (`stsz`, `stsc`, `stco`, `stts`, and `trun` in fragments, `stco`/`co64` in `graft`) is now
+  checked against the bytes its box really holds. Such a file is reported as unreadable instead of
+  crashing the run. A truncated or half-written index is exactly what this tool is pointed at.
+- `sniff_video_codec` raised `TypeError` when handed one sample instead of a list.
+
+**Added**
+- `doctor` lists `mp3val` as an *optional* helper (`opt`): reported, never fatal.
+- `scripts/fuzz_check.py`, run in CI against the installed wheel: any traceback, any exit code
+  outside 0–3, or any `fix` that exits 0 with a file that does not decode, fails the build.
+- 700+ parameterised robustness tests; one of them was verified to fail with the guard removed.
+- The container image now ships `mp3val`, so MP3 repair works inside Docker.
+
+**Packaging**
+- Licence declared as SPDX (`License-Expression: MIT`) and `LICENSE` is shipped in the wheel.
+  Project URLs (homepage, source, issues, changelog) added to the metadata.
+
 ## 0.3.0
 
 Two gaps closed, and both were found by measuring rather than by reading homepages.

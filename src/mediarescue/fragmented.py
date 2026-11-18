@@ -77,6 +77,13 @@ def _trun(buf: bytes, box: Box, origin: int, cursor: int | None, default_dur: in
     elif cursor is None:
         cursor = origin
     samples = []
+    # A trun written by a crashed muxer can claim billions of entries. Only as many as the box
+    # still holds can be read, so clamp instead of trusting the count.
+    per_sample = 4 * sum(1 for bit in (0x000100, 0x000200, 0x000400, 0x000800) if flags & bit)
+    if per_sample:
+        count = min(count, max(0, (box.end - cur) // per_sample))
+    elif count > 1_000_000:      # no per-sample fields: sizes come from tfhd, count is all we have
+        count = 1_000_000
     for _ in range(count):
         dur, size, sflags, cto = default_dur, default_size, 0, 0
         if flags & 0x000100:

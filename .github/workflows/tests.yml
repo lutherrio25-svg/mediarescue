@@ -72,3 +72,6 @@ jobs:
           python -m pip install --quiet dist/*.whl
       - name: Acceptance run against the installed CLI
         run: python scripts/acceptance_check.py
+      - name: Fuzz the installed CLI with damaged files
+        # Fails on any traceback, any exit code outside 0..3, and any "fixed" file that does not decode.
+        run: python scripts/fuzz_check.py

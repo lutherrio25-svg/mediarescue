@@ -2,8 +2,10 @@
 #   docker run --rm -v "D:/broken:/media" ghcr.io/lutherrio25-svg/mediarescue:latest scan /media
 FROM python:3.12-slim
 
+# ffmpeg decodes and remuxes; mp3val rebuilds damaged MP3 frame streams (Debian ships it, so the
+# image needs no hand-downloaded binary).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg mp3val \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

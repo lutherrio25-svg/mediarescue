@@ -1,8 +1,9 @@
 # mediarescue
 
-[![container](https://img.shields.io/badge/ghcr.io-mediarescue%3A0.3.0-2496ed?logo=docker&logoColor=white)](https://github.com/lutherrio25-svg/mediarescue/pkgs/container/mediarescue)
+[![container](https://img.shields.io/badge/ghcr.io-mediarescue-2496ed?logo=docker&logoColor=white)](https://github.com/lutherrio25-svg/mediarescue/pkgs/container/mediarescue)
 [![release](https://img.shields.io/github/v/release/lutherrio25-svg/mediarescue?label=release)](https://github.com/lutherrio25-svg/mediarescue/releases)
 [![tests](https://github.com/lutherrio25-svg/mediarescue/actions/workflows/tests.yml/badge.svg)](https://github.com/lutherrio25-svg/mediarescue/actions/workflows/tests.yml)
+[![license](https://img.shields.io/github/license/lutherrio25-svg/mediarescue)](LICENSE)
 
 Diagnose and repair damaged audio/video files from the command line. It tells you what is
 wrong with a file, repairs it into a **new** file, and reports exactly what it had to give up.
@@ -53,20 +54,23 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.2.0 — doctor
+mediarescue 0.3.1 — doctor
 
-  ok    python        3.13.5
-  ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e
-  ok    ffprobe       ffprobe version N-127043-g5a54fcf75e
-  ok    write access  D:\videos
-  ok    disk space    43.3 GB free
+  ok    python        3.14.9
+  ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
+  ok    ffprobe       ffprobe version N-127043-g5a54fcf75e-20260930
+  opt   mp3val        not installed — damaged MP3 frame streams can be rebuilt
+                      -> download mp3val, or set MEDIARESCUE_MP3VAL to its path
+  ok    write access  C:\Users\you\Documents\mediarescue
+  ok    disk space    49.8 GB free
 
 ready: everything this tool needs is present
 ```
 
-Anything missing is printed as `FAIL` together with the command that fixes it, and the exit
-code is 1. It checks the folder repairs will write into — pass `--workdir D:/fixed` if that is
-not the one you are standing in.
+`opt` marks an optional helper: the tool is ready without it, it just repairs fewer formats.
+Anything *required* that is missing is printed as `FAIL` together with the command that fixes
+it, and the exit code is 1. It checks the folder repairs will write into — pass
+`--workdir D:/fixed` if that is not the one you are standing in.
 
 ## Quick start
 
@@ -295,6 +299,7 @@ Format specs and prior art this tool is built on:
 pip install -e .[dev]
 python -m pytest                    # fixtures are generated with ffmpeg; those tests skip without it
 python scripts/acceptance_check.py  # drives an installed CLI end to end, exit codes included
+python scripts/fuzz_check.py        # damages 7 file types 10 ways each; any traceback or false "fixed" fails
 ```
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed between versions, and

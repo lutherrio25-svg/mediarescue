@@ -31,6 +31,7 @@ class Check:
     ok: bool
     detail: str
     hint: str = ""
+    optional: bool = False
 
 
 def install_hint() -> str:
@@ -87,7 +88,16 @@ def _space_check(workdir: Path) -> Check:
     return Check("disk space", True, human)
 
 
+def _optional_tool(name: str, path: str | None, gain: str, hint: str) -> Check:
+    """Reported, never fatal: the tool works without it, just on a smaller set of files."""
+    if path is None:
+        return Check(name, False, f"not installed — {gain}", hint, optional=True)
+    return Check(name, True, f"{path} — {gain}", optional=True)
+
+
 def run_checks(workdir: Path | None = None) -> list[Check]:
+    from .external import mp3val_path
+
     workdir = Path(workdir) if workdir else Path.cwd()
     py = ".".join(str(n) for n in sys.version_info[:3])
     checks = [
@@ -96,6 +106,9 @@ def run_checks(workdir: Path | None = None) -> list[Check]:
               "" if sys.version_info >= MIN_PYTHON else "install a newer Python"),
         _tool_check("ffmpeg", FFMPEG),
         _tool_check("ffprobe", FFPROBE),
+        _optional_tool("mp3val", mp3val_path(),
+                       "damaged MP3 frame streams can be rebuilt",
+                       "download mp3val, or set MEDIARESCUE_MP3VAL to its path"),
         _write_check(workdir),
         _space_check(workdir),
     ]
@@ -108,11 +121,16 @@ def report(checks: list[Check], colour: bool = False) -> str:
     width = max(len(c.name) for c in checks)
     lines = [f"mediarescue {__version__} — doctor", ""]
     for c in checks:
-        mark = paint("ok  ", "green", colour) if c.ok else paint("FAIL", "red", colour)
+        if c.ok:
+            mark = paint("ok  ", "green", colour)
+        elif c.optional:
+            mark = paint("opt ", "yellow", colour)
+        else:
+            mark = paint("FAIL", "red", colour)
         lines.append(f"  {mark}  {c.name.ljust(width)}  {c.detail}")
         if not c.ok and c.hint:
             lines.append(f"        {' ' * width}  {paint('-> ' + c.hint, 'dim', colour)}")
-    failed = [c for c in checks if not c.ok]
+    failed = [c for c in checks if not c.ok and not c.optional]
     lines.append("")
     if failed:
         lines.append(paint(f"not ready: {len(failed)} of {len(checks)} checks failed", "red", colour))
@@ -123,4 +141,4 @@ def report(checks: list[Check], colour: bool = False) -> str:
 
 def doctor(workdir: Path | None = None, colour: bool = False) -> tuple[int, str]:
     checks = run_checks(workdir)
-    return (0 if all(c.ok for c in checks) else 1), report(checks, colour)
+    return (0 if all(c.ok or c.optional for c in checks) else 1), report(checks, colour)

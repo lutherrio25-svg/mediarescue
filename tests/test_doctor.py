@@ -39,3 +39,22 @@ def test_report_never_claims_ready_with_a_failure():
     text = doctor_mod.report(checks)
     assert "ready: everything" not in text
     assert "not ready: 1 of 2 checks failed" in text
+
+
+def test_a_missing_optional_tool_is_reported_but_not_fatal():
+    checks = [doctor_mod.Check("a", True, "fine"),
+              doctor_mod.Check("mp3val", False, "not installed", "install it", optional=True)]
+    text = doctor_mod.report(checks)
+    assert "opt " in text and "FAIL" not in text
+    assert "ready: everything" in text
+
+
+def test_mp3val_is_listed_in_the_checks(monkeypatch, tmp_path):
+    monkeypatch.setattr(doctor_mod, "FFMPEG", "ffmpeg")
+    monkeypatch.setattr(doctor_mod, "FFPROBE", "ffprobe")
+    checks = doctor_mod.run_checks(tmp_path)
+    mp3 = [c for c in checks if c.name == "mp3val"]
+    assert mp3 and mp3[0].optional
+    # A machine without mp3val is still ready: it just repairs fewer formats.
+    code, text = doctor_mod.doctor(tmp_path)
+    assert code == 0, text
