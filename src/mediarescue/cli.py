@@ -80,6 +80,11 @@ def cmd_doctor(args) -> int:
     return code
 
 
+def cmd_menu(args) -> int:
+    from .menu import run_menu
+    return run_menu()
+
+
 def _pick_strategy(severity: Severity, requested: str) -> str:
     if requested != "auto":
         return requested
@@ -344,6 +349,9 @@ def _fix_batch(targets: list[Path], args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Without this, `not argv` is true for every real invocation and the no-argument shortcut
+    # swallows the command line: `mediarescue scan x` would open the menu instead of scanning.
+    argv = list(sys.argv[1:] if argv is None else argv)
     ap = argparse.ArgumentParser(prog="mediarescue",
                                  description="Diagnose and repair damaged media; originals are never modified.")
     ap.add_argument("--version", action="version", version=__version__)
@@ -397,6 +405,19 @@ def main(argv: list[str] | None = None) -> int:
                    help="salvage: trim, remux, then drop a head that was overwritten with junk; "
                         "carve: rebuild video from the raw H.264 payload without a reference")
     f.set_defaults(func=cmd_fix)
+
+    m = sub.add_parser("menu", help="interactive all-in-one menu (also opens when run with no arguments)")
+    m.set_defaults(func=cmd_menu)
+
+    if not argv:
+        # A bare `mediarescue` in a terminal is someone who has not read the README yet: give them
+        # the menu. A bare call from a script gets help and exits 2, so nothing ever blocks on input.
+        # Both streams are checked: on Windows a redirected stdin can still report itself as a tty.
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            return cmd_menu(argparse.Namespace())
+        ap.print_help()
+        return 2
+
     args = ap.parse_args(argv)
     return args.func(args)
 

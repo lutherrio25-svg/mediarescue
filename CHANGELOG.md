@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0
+
+**All-in-one menu**
+- `mediarescue` with no arguments in a terminal opens a numbered menu: doctor, scan, repair one
+  file, repair a whole folder, or read the damage-class table. `mediarescue menu` opens it too.
+- The menu calls the real CLI rather than re-implementing it, so an action cannot drift from the
+  command it stands for.
+- From a script (stdin or stdout not a terminal) a bare `mediarescue` prints help and exits 2, so
+  nothing ever blocks waiting for input.
+
+**Fixed on the way**
+- `main()` ignored `sys.argv` when called with no explicit argument list, so the new no-argument
+  shortcut would have swallowed every real command: `mediarescue scan x` opened the menu instead
+  of scanning. Caught by running the installed wheel, not by unit tests, which always pass argv
+  explicitly. There is now a test that drives `main()` through `sys.argv`.
+
 ## 0.3.2
 
 Found by running the *published* package on the real damaged files rather than on fixtures — the

@@ -54,7 +54,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.3.2 — doctor
+mediarescue 0.4.0 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -71,6 +71,30 @@ ready: everything this tool needs is present
 Anything *required* that is missing is printed as `FAIL` together with the command that fixes
 it, and the exit code is 1. It checks the folder repairs will write into — pass
 `--workdir D:/fixed` if that is not the one you are standing in.
+
+## All-in-one menu
+
+No flags to remember: run `mediarescue` with no arguments in a terminal and you get a menu.
+
+![mediarescue all-in-one menu: choose 2, type a folder, read the scan table, back to the menu](docs/menu.png)
+
+```
+mediarescue 0.4.0 — all-in-one menu
+
+  1  Check this machine can repair files (doctor)
+  2  Scan a file or folder — what is wrong?
+  3  Repair one file
+  4  Repair every damaged file in a folder
+  5  Show the damage classes and what each repair does
+  0  Quit
+
+choice>
+```
+
+Each choice asks for the path it needs and then runs the same command you would have typed —
+the menu calls the CLI, it does not re-implement it, so the two can never disagree. `mediarescue
+menu` opens it explicitly. From a script (no terminal) a bare `mediarescue` prints the help and
+exits 2 instead of waiting for input.
 
 ## Quick start
 
