@@ -15,9 +15,9 @@ thing 765 green tests did not catch.
   A stated reason is now shown in full; only a raw ffmpeg log is trimmed to its last line.
 
 **Verified on real files** (installed from GitHub, outputs checked with ffmpeg, not by this tool)
-- `Viral - Bu Guru Montok` (18.5 MB, `missing-trailer`) → `salvage`, 126.20 s, h264+aac, 0 errors.
-- `MIB Seoyeon` (199 MB, `fragmented`, AV1) + `--reference` → 2167.75 s, av1+aac, 0 errors.
-- `She's In BIG Trouble` (306 MB, `fragmented`, AV1) + `--reference` → 2197.33 s, av1+aac, 0 errors.
+- `torntomcat` (18.5 MB, `missing-trailer`) → `salvage`, 126.20 s, h264+aac, 0 errors.
+- `excomunicado` (199 MB, `fragmented`, AV1) + `--reference` → 2167.75 s, av1+aac, 0 errors.
+- `BIG Trouble` (306 MB, `fragmented`, AV1) + `--reference` → 2197.33 s, av1+aac, 0 errors.
 - Three healthy real-world files on the same machine stayed `healthy`; all three sources kept their
   original size and mtime.
 
