@@ -54,7 +54,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.3.1 — doctor
+mediarescue 0.3.2 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930

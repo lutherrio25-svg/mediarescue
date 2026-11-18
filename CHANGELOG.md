@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.2
+
+Found by running the *published* package on the real damaged files rather than on fixtures — the
+thing 765 green tests did not catch.
+
+**Fixed**
+- An AV1 file with no index and no `--reference` used to fail with *"the stream carries no SPS/PPS
+  (NAL 7/8)"*. AV1 has no SPS/PPS at all: `carve` understands only H.264 and was being handed AV1
+  bytes. The codec is now checked first, and the message says what is actually missing: the audio
+  configuration lived in the lost index, so a reference file from the same encoder is needed — and
+  it does not have to be AV1.
+- `fix --brief` truncated a failure from the end, cutting off the sentence that names the cause.
+  A stated reason is now shown in full; only a raw ffmpeg log is trimmed to its last line.
+
+**Verified on real files** (installed from GitHub, outputs checked with ffmpeg, not by this tool)
+- `Viral - Bu Guru Montok` (18.5 MB, `missing-trailer`) → `salvage`, 126.20 s, h264+aac, 0 errors.
+- `MIB Seoyeon` (199 MB, `fragmented`, AV1) + `--reference` → 2167.75 s, av1+aac, 0 errors.
+- `She's In BIG Trouble` (306 MB, `fragmented`, AV1) + `--reference` → 2197.33 s, av1+aac, 0 errors.
+- Three healthy real-world files on the same machine stayed `healthy`; all three sources kept their
+  original size and mtime.
+
 ## 0.3.1
 
 Found by fuzzing — damaging seven file types ten ways each and feeding random bytes to every
