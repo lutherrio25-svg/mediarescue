@@ -281,16 +281,19 @@ Format specs and prior art this tool is built on:
 - [AOMedia AV1 Bitstream & Decoding Process Specification](https://aomediacodec.github.io/av1-spec/) — OBU framing (section 5.5), sequence-header parsing and the `av1C` fields `flatten` writes.
 - [ITU-T H.264 (free copy)](https://www.itu.int/rec/T-REC-H.264) — NAL unit types, IDR frames, SPS/PPS, and the length-prefixed sample layout `carve` walks.
 - **ISO/IEC 14496-3** — AAC `AudioSpecificConfig` carried inside `esds`. Paid standard, no free link.
+- **ISO/IEC 11172-3** — MPEG-1 Audio Layer III frame header and the Xing/Info tag that `mp3val` rebuilds. Paid standard, no free link.
 - [Apple QuickTime File Format](https://developer.apple.com/documentation/quicktime-file-format) — free reference for `moov`, `stbl`, `stco`/`co64`, `stsz`, `stts`, `edts`.
 - [MP4 Registration Authority](https://mp4ra.org/) — registered box, codec and `ftyp` brand identifiers.
-- [FFmpeg formats docs](https://ffmpeg.org/ffmpeg-formats.html) and [`libavformat/mov.c`](https://github.com/FFmpeg/FFmpeg/blob/master/libavformat/mov.c) — how a real demuxer reads these boxes (and why it rejects the files here).
+- [FFmpeg formats docs](https://ffmpeg.org/ffmpeg-formats.html), [`libavformat/mov.c`](https://github.com/FFmpeg/FFmpeg/blob/master/libavformat/mov.c) and [`libavformat/avidec.c`](https://github.com/FFmpeg/FFmpeg/blob/master/libavformat/avidec.c) — how a real demuxer reads these boxes and how it resolves `idx1` offsets (the two bases `avi.check` tries), and why it rejects the files here.
+- [Matroska / EBML specification](https://www.matroska.org/technical/specs/index.html) — what `scan --deep` can and cannot conclude about an MKV.
+- [RFC 8216 (HLS)](https://datatracker.ietf.org/doc/html/rfc8216) — why fragmented MP4 segments arrive without `ftyp`/`moov`, the `fragmented` class.
 - [PNG specification (W3C)](https://www.w3.org/TR/png/) — signature and `IEND` check.
 - [JPEG, ITU-T T.81 (W3C copy)](https://www.w3.org/Graphics/JPEG/itu-t81.pdf) — SOI/EOI markers.
 - [Microsoft AVI RIFF File Reference](https://learn.microsoft.com/en-us/windows/win32/directshow/avi-riff-file-reference) — `LIST movi` chunk chain, the `idx1` entry layout and what its offsets are relative to; the basis of `avi.check`.
 - [mp3val](https://mp3val.sourceforge.net/) — the MPEG frame/Xing-header validator that `fix` drives for damaged MP3s.
 - [MKVToolNix](https://mkvtoolnix.download/) — `mkvmerge`'s remux behaviour, the reference for what container rewriting can and cannot repair.
 - [DivFix++](https://www.divfix.org/) — the long-standing AVI index rebuilder; its approach is what `corrupt-index` now does internally.
-- [untrunc](https://github.com/ponchio/untrunc) — the established reference-based MP4 repair tool; `graft` follows the same idea.
+- [untrunc](https://github.com/anthwlock/untrunc) (fork of [ponchio/untrunc](https://github.com/ponchio/untrunc)) — the established reference-based MP4 repair tool, and the build that was measured against `flatten`; it handles more codecs than the original.
 - [PhotoRec](https://www.cgsecurity.org/wiki/PhotoRec) — for carving files from a raw disk, which this tool does not do.
 
 ### Development
