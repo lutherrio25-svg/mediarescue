@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0
+
+The intact twin of a damaged download almost never sits on the same disk — it sits in a free cloud
+drive. `--reference` now accepts a **share link** as well as a path.
+
+- **New:** links are resolved, downloaded to a temporary folder, used for the repair, and deleted
+  when the run ends. Menu choices 3 and 4 ask for "a file or link".
+- **New:** supported hosts — TeraBox (including `1024terabox`, `terabox.app`, `terasharelink` and
+  the other mirror domains), MediaFire, pixeldrain, GoFile, Google Drive, Dropbox, OneDrive, and
+  any direct `http(s)` URL. A TeraBox folder share uses its largest video.
+- **Refused on purpose:** Mega (links are decrypted in the browser) and any link that answers with
+  a web page instead of a file — an HTML page is never saved as a "reference".
+- Downloads are capped at 4 GB, and `MEDIARESCUE_TERABOX_COOKIE` lets a TeraBox share that wants a
+  signed-in session work without reimplementing their login.
+
 ## 0.5.3
 
 Found by running a 20-file batch on a real folder of damaged downloads: 10 red `FAILED` lines

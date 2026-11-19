@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, ui
+from . import __version__, fetch, ui
 from .diagnose import MEDIA_SUFFIXES, diagnose
 from .ffmpeg import have_ffmpeg, probe, remux
 from .report import Severity
@@ -269,9 +269,61 @@ def cmd_fix(args) -> int:
         for m in missing:
             print(f"not found: {m}", file=sys.stderr)
         return 2
-    if len(targets) == 1 and targets[0].is_file():
-        return _fix_single(targets[0], args)
-    return _fix_batch(targets, args)
+    # A reference given as a link (cloud drive, direct URL) is fetched once, used by every file in
+    # the batch, and deleted afterwards -- the user keeps nothing they did not already have.
+    fetched = None
+    reference = (getattr(args, "reference", None) or "").strip()
+    if reference and fetch.is_url(reference):
+        try:
+            fetched = _fetch_reference(reference, args)
+        except fetch.FetchError as exc:
+            print(f"cannot use that link: {exc}", file=sys.stderr)
+            return 2
+        if fetched is None:
+            return 2
+        args.reference = str(fetched)
+    try:
+        if len(targets) == 1 and targets[0].is_file():
+            return _fix_single(targets[0], args)
+        return _fix_batch(targets, args)
+    finally:
+        if fetched is not None:
+            fetch.cleanup(fetched)
+
+
+def _fetch_reference(url: str, args) -> Path | None:
+    """Download `url` into a scratch folder; returns the local file, or None after reporting."""
+    import tempfile
+
+    from .ui import colour_for, enabled
+    paint = colour_for(enabled(override=False if getattr(args, "no_color", False) else None))
+    folder = Path(tempfile.mkdtemp(prefix="mediarescue-ref-"))
+    quiet = getattr(args, "quiet", False)
+
+    def report(done: int, total: int) -> None:
+        if quiet or not sys.stdout.isatty():
+            return
+        of = f" / {fetch.describe(total)}" if total else ""
+        print(f"\r  downloading reference: {fetch.describe(done)}{of}", end="", flush=True)
+
+    if not quiet:
+        print(paint(f"reference link: {url}", "dim"), file=sys.stderr)
+    try:
+        path = fetch.download(url, folder, name_hint="reference", report=report)
+    except fetch.FetchError as exc:
+        if not quiet:
+            print("\r" + " " * 60 + "\r", end="")
+        fetch.cleanup(folder / "reference.mp4")
+        raise
+    except OSError as exc:
+        fetch.cleanup(folder / "reference.mp4")
+        raise fetch.FetchError(f"could not write the download: {exc}") from exc
+    if not quiet:
+        if sys.stdout.isatty():
+            print("\r" + " " * 60 + "\r", end="")
+        print(paint(f"reference downloaded: {path.name} ({fetch.describe(path.stat().st_size)})",
+                    "dim"), file=sys.stderr)
+    return path
 
 
 def _fix_single(src: Path, args) -> int:
@@ -410,6 +462,11 @@ def _fix_batch(targets: list[Path], args) -> int:
             out = out_dir or folder / "recovered"
             print(paint(f'  mediarescue fix "{folder}" --out-dir "{out}" '
                         f'--reference "C:/path/to/one-intact-file.mp4"', "yellow"))
+        print(paint("if that file is online (TeraBox, Google Drive, MediaFire, pixeldrain, GoFile, "
+                    "Dropbox, OneDrive), pass the share link instead — it is downloaded, used, and "
+                    "deleted:", "yellow"))
+        print(paint('  mediarescue fix "<folder>" --out-dir "<out>" --reference "https://..."',
+                    "yellow"))
     return 1 if left else 0
 
 
@@ -458,7 +515,10 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--no-color", action="store_true", help="never emit ANSI colour")
     f.add_argument("--brief", action="store_true",
                    help="one line per file instead of the full JSON report")
-    f.add_argument("--reference", help="intact file from the same device/encoder/session")
+    f.add_argument("--reference", help="intact file from the same device/encoder/session, or a "
+                                       "share link (TeraBox, Google Drive, MediaFire, pixeldrain, "
+                                       "GoFile, Dropbox, OneDrive); links are downloaded to a "
+                                       "temporary folder and deleted afterwards")
     f.add_argument("--timescale", type=int,
                    help="flatten only: force one timescale for all tracks, e.g. 90000")
     f.add_argument("--deep", action="store_true",

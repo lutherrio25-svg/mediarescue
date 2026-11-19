@@ -302,7 +302,7 @@ def run_menu(reader: Reader = input, writer: Writer = print,
             if path is None:
                 continue
             out = reader("  write the repair to (blank = next to the original)> ").strip().strip('"')
-            ref = reader("  reference file, if the index is gone (blank = none)> ").strip().strip('"')
+            ref = reader("  reference file or link, if the index is gone (blank = none)> ").strip().strip('"')
             argv = ["fix", str(path)]
             if out:
                 argv += ["-o", out]
@@ -315,7 +315,7 @@ def run_menu(reader: Reader = input, writer: Writer = print,
                 continue
             default = (path / "recovered") if path.is_dir() else (path.parent / "recovered")
             out_dir = reader(f"  write repairs into (blank = {default})> ").strip().strip('"')
-            ref = reader("  one intact file from the same source (blank = none)> ").strip().strip('"')
+            ref = reader("  one intact file or link from the same source (blank = none)> ").strip().strip('"')
             argv = ["fix", str(path), "--out-dir", out_dir or str(default)]
             if ref:
                 argv += ["--reference", ref]

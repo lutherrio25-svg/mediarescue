@@ -250,6 +250,39 @@ No reference anywhere? The tool looks for one itself: a healthy file **in the sa
 video codec matches is picked automatically, and the choice is reported in the output
 (`"reference": "…"`). Only when that fails does it fall back to `--strategy carve`.
 
+## When the intact file is online instead of on your disk
+
+The twin of a damaged download often still lives in a free cloud drive. `--reference` accepts a
+**share link** as well as a path, downloads it to a temporary folder, uses it, and deletes it when
+the run ends:
+
+```bash
+mediarescue fix "D:/file-rusak/bad-block" --out-dir "D:/file-rusak/recovered" \
+  --reference "https://terabox.com/s/1AbCdEfGhIjKl"
+```
+
+Supported links:
+
+| Host | What to paste |
+|---|---|
+| **TeraBox** (and its mirror domains) | the normal share link, `.../s/<id>` or `.../sharing/<id>` |
+| MediaFire, pixeldrain, GoFile | the share link as it is |
+| Google Drive | `Share → copy link`; the file can stay private-if-link |
+| Dropbox / OneDrive | the share link; `?dl=0`/`?download=0` is rewritten to a download |
+| anything else | a direct `http(s)` link to the file itself |
+
+Notes that save a support round-trip:
+
+- **Mega is refused** — its links are decrypted inside the browser, so download it yourself and
+  pass the local file instead.
+- TeraBox shares that are folders are fine: the **largest video** in the share is used, since a
+  reference says nothing about *which* video it is, only how it was encoded.
+- If TeraBox asks for a logged-in session, copy that page's `Cookie` header into the environment
+  variable `MEDIARESCUE_TERABOX_COOKIE` and run again. Cookies expire; refresh when it complains.
+- A share link that returns a sign-in page instead of a file is reported as exactly that, never
+  saved as a fake reference.
+- Downloads are capped at 4 GB: anything larger is not a reference, it is a mistake.
+
 ## When it cannot be fixed
 
 This is a repair tool, not a magic wand:
