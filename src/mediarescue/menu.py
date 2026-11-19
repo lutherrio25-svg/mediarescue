@@ -315,7 +315,11 @@ def run_menu(reader: Reader = input, writer: Writer = print,
                 continue
             default = (path / "recovered") if path.is_dir() else (path.parent / "recovered")
             out_dir = reader(f"  write repairs into (blank = {default})> ").strip().strip('"')
-            last = run(["fix", str(path), "--out-dir", out_dir or str(default)])
+            ref = reader("  one intact file from the same source (blank = none)> ").strip().strip('"')
+            argv = ["fix", str(path), "--out-dir", out_dir or str(default)]
+            if ref:
+                argv += ["--reference", ref]
+            last = run(argv)
         elif choice == "5":
             writer(DAMAGE_HELP)
         else:

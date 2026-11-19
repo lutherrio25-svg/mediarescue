@@ -19,8 +19,73 @@ def test_fix_on_a_directory_runs_a_batch(tmp_path, capsys):
     (tmp_path / "a.mp4").write_bytes(b"\x00" * 64)      # unrepairable, skipped
     assert main(["fix", str(tmp_path)]) == 0
     out = capsys.readouterr().out
-    assert "1 files: 0 repaired, 0 failed, 1 skipped" in out
+    assert "1 files: 0 repaired, 1 skipped" in out
     assert "Traceback" not in out
+
+
+def test_a_batch_never_touches_its_own_previous_output(tmp_path, capsys):
+    (tmp_path / "a.mp4").write_bytes(b"\x00" * 64)                # unrepairable, skipped
+    (tmp_path / "a.repaired.mp4").write_bytes(b"\x00" * 64)       # this tool's own output
+    (tmp_path / "a.repaired.stage.mp4").write_bytes(b"\x00" * 64)
+    assert main(["fix", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "1 files: 0 repaired, 1 skipped" in out
+
+
+def test_a_batch_skips_files_that_would_land_inside_the_output_folder(tmp_path, capsys):
+    out_dir = tmp_path / "recovered"
+    out_dir.mkdir()
+    (tmp_path / "a.mp4").write_bytes(b"\x00" * 64)      # unrepairable, skipped
+    (out_dir / "b.mp4").write_bytes(b"\x00" * 64)       # inside --out-dir: invisible to the batch
+    assert main(["fix", str(tmp_path), "--out-dir", str(out_dir)]) == 0
+    out = capsys.readouterr().out
+    assert "1 files: 0 repaired, 1 skipped" in out
+
+
+def test_a_batch_separates_needs_reference_from_failed(tmp_path, capsys, monkeypatch):
+    """The red FAILED is for real dead ends; a file one intact sibling away from repairable is
+    a different, actionable state — the summary must say which and what a reference even is."""
+    from mediarescue import cli
+
+    broken = tmp_path / "broken.mp4"
+    broken.write_bytes(b"garbage that reads as nothing")
+
+    class _Diagnosis:
+        severity = cli.Severity.MISSING_ATOMS
+        needs_reference = True
+
+    monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
+    monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)
+    monkeypatch.setattr(cli, "_repair",
+                        lambda src, out, args, d: {"ok": False, "strategy": "graft",
+                                                   "reason": "no SPS/PPS without a --reference file"})
+
+    assert main(["fix", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "need-ref" in out
+    assert "need a reference file" in out
+    assert "FAILED" not in out
+    assert "how to fix the other 1" in out
+    assert "--reference" in out
+
+
+def test_a_batch_with_nothing_left_out_is_exit_zero(tmp_path, capsys, monkeypatch):
+    """need-ref is no longer silently green: it is a real gap, so the batch keeps exit 1."""
+    from mediarescue import cli
+
+    broken = tmp_path / "broken.mp4"
+    broken.write_bytes(b"garbage that reads as nothing")
+
+    class _Diagnosis:
+        severity = cli.Severity.MISSING_ATOMS
+        needs_reference = True
+
+    monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
+    monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)
+    monkeypatch.setattr(cli, "_repair",
+                        lambda src, out, args, d: {"ok": True, "output": str(out),
+                                                   "strategy": "graft"})
+    assert main(["fix", str(tmp_path)]) == 0
 
 
 def test_diagnose_on_a_directory_is_unsupported(tmp_path):

@@ -29,6 +29,12 @@ SKIP_DIRS = {
 }
 
 
+def _owns_output(name: str) -> bool:
+    """Files this tool itself wrote on a previous run; never worth a second look."""
+    lowered = name.lower()
+    return ".repaired." in lowered or ".stage." in lowered
+
+
 def iter_media(paths: list[str]):
     for raw in paths:
         p = Path(raw)
@@ -37,7 +43,8 @@ def iter_media(paths: list[str]):
                 if f.is_file() and f.suffix.lower() in MEDIA_SUFFIXES:
                     # Only the path *below* the requested root is filtered, so a
                     # root that itself lives under AppData still scans.
-                    if not any(part.lower() in SKIP_DIRS for part in f.relative_to(p).parts):
+                    if not any(part.lower() in SKIP_DIRS for part in f.relative_to(p).parts) \
+                            and not _owns_output(f.name):
                         yield f
         elif p.is_file():
             yield p
@@ -328,9 +335,10 @@ def _fix_batch(targets: list[Path], args) -> int:
         return 3
 
     paint = ui.colour_for(ui.enabled(override=False if getattr(args, "no_color", False) else None))
-    out_dir = Path(args.out_dir) if args.out_dir else None
-    files = list(iter_media([str(t) for t in targets]))
-    repaired, failed, skipped = [], [], []
+    out_dir = Path(args.out_dir).resolve() if args.out_dir else None
+    files = [f for f in iter_media([str(t) for t in targets])
+             if out_dir is None or not out_dir in [f.resolve(), *f.resolve().parents]]
+    repaired, failed, need_ref, skipped = [], [], [], []
     total = len(files)
 
     for index, f in enumerate(files, 1):
@@ -365,17 +373,40 @@ def _fix_batch(targets: list[Path], args) -> int:
                 for note in result.get("notes", []):
                     print(paint(f"            {note}", "dim"))
         else:
-            failed.append((f, result))
             why = result.get("reason") or (
                 f"{result.get('verify', {}).get('decode_errors', 0)} decode errors in the output")
-            print(f"  {counter} {paint('FAILED', 'red')} {f.name:<44} {paint(why, 'red')}")
+            # Files that need an intact sibling are not "failed" — they are one file away from
+            # being repairable. Grouping them apart keeps a red FAILED for real impossibilities.
+            if "--reference" in why or d.severity.needs_reference:
+                need_ref.append((f, why))
+                if not args.quiet:
+                    print(f"  {counter} {paint('need-ref', 'yellow')} {f.name:<44} "
+                          f"{paint('needs an intact file recorded the same way', 'yellow')}")
+            else:
+                failed.append((f, result))
+                print(f"  {counter} {paint('FAILED', 'red')} {f.name:<44} {paint(why, 'red')}")
 
-    summary = (f"{total} files: {len(repaired)} repaired, {len(failed)} failed, "
-               f"{len(skipped)} skipped")
-    print("\n" + (paint(summary, "red") if failed else paint(summary, "green")))
+    parts = [f"{len(repaired)} repaired"]
+    if need_ref:
+        parts.append(f"{len(need_ref)} need a reference file")
+    if failed:
+        parts.append(f"{len(failed)} failed")
+    parts.append(f"{len(skipped)} skipped")
+    left = len(need_ref) + len(failed)
+    summary = f"{total} files: " + ", ".join(parts)
+    print("\n" + (paint(summary, "red" if failed else "yellow" if need_ref else "green")))
     if out_dir:
         print(paint(f"output folder: {out_dir}", "dim"))
-    return 1 if failed else 0
+    if need_ref:
+        # Say what a reference actually is, once, with a copy-pasteable command — the per-file
+        # reasons above are long; this is the part a beginner acts on.
+        folder = need_ref[0][0].parent
+        out = out_dir or folder / "recovered"
+        print(paint(f"how to fix the other {len(need_ref)}: they need one intact file from the "
+                    f"same source (same phone, app or download site — not the same video). Run:", "yellow"))
+        print(paint(f'  mediarescue fix "{folder}" --out-dir "{out}" '
+                    f'--reference "C:/path/to/one-intact-file.mp4"', "yellow"))
+    return 1 if left else 0
 
 
 def main(argv: list[str] | None = None) -> int:

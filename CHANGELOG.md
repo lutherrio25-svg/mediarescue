@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.3
+
+Found by running a 20-file batch on a real folder of damaged downloads: 10 red `FAILED` lines
+that were all the same, solvable situation.
+
+- **Fixed:** a batch now separates "needs a reference file" from real failures. Those files were
+  not unrepairable — their encoder stored the SPS/PPS in the index, which is gone, so they need
+  one intact file from the same source. They now print as yellow `need-ref`, the summary says
+  `10 need a reference file` instead of `10 failed`, and a closing block explains what a reference
+  is (same phone, app or download site — not the same video) with a copy-pasteable command.
+- **Fixed:** `scan` and batch `fix` now skip this tool's own output files (`*.repaired.*`,
+  `*.stage.*`), and a batch never re-processes files that live inside its `--out-dir`.
+- Menu choice `4` now asks for one intact file (blank = none) and passes it as `--reference`.
+
 ## 0.5.2
 
 Found by pressing `1` in the menu on a machine where Git Bash had opened in `C:\Program Files\Git`:

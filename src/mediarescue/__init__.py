@@ -2,5 +2,5 @@
 from .diagnose import diagnose
 from .report import Diagnosis, Severity
 
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 __all__ = ["diagnose", "Diagnosis", "Severity", "__version__"]

@@ -60,17 +60,20 @@ def test_batch_repairs_damaged_and_leaves_healthy_alone(tmp_path, capsys):
     assert (good.stat().st_size, good.stat().st_mtime_ns) == before   # untouched
     assert not (tmp_path / "good.repaired.mp4").exists()
     assert "healthy, left untouched" in out
-    assert "repaired" in out and "failed" in out
+    assert "1 repaired" in out and "failed" not in out
 
 
 @needs_ffmpeg
-def test_batch_reports_a_file_it_cannot_repair_and_still_exits_nonzero(tmp_path, capsys):
+def test_batch_reports_needs_reference_and_still_exits_nonzero(tmp_path, capsys):
+    """The index-stripped file is not "failed" — it is one intact sibling away from repairable."""
     _, damaged, _ = build_folder(tmp_path)
 
     assert main(["fix", str(tmp_path)]) == 1
     out = capsys.readouterr().out
 
-    assert "FAILED" in out and "hopeless.mp4" in out
+    assert "need-ref" in out and "hopeless.mp4" in out
+    assert "FAILED" not in out
+    assert "how to fix the other 1" in out
     assert (tmp_path / "damaged.repaired.mp4").exists()   # the good repair still happened
 
 

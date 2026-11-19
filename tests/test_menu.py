@@ -89,6 +89,18 @@ def test_batch_choice_uses_out_dir(tmp_path):
     assert calls == [["fix", str(folder), "--out-dir", str(tmp_path / "fixed")]]
 
 
+def test_batch_choice_passes_a_reference_when_given(tmp_path):
+    folder = tmp_path / "broken"
+    folder.mkdir()
+    ref = tmp_path / "intact.mp4"
+    ref.write_bytes(b"\x00" * 64)
+    calls = []
+    s = Session(["4", str(folder), "", str(ref), "", "0"])
+    run_menu(s.read, s.write, dispatch=lambda argv: calls.append(argv) or 0)
+    assert calls == [["fix", str(folder), "--out-dir", str(folder / "recovered"),
+                      "--reference", str(ref)]]
+
+
 def test_a_missing_path_is_refused_without_running_anything(tmp_path):
     calls = []
     s = Session(["2", str(tmp_path / "nope.mp4"), "", "0"])
