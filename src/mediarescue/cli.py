@@ -377,7 +377,10 @@ def _fix_batch(targets: list[Path], args) -> int:
                 f"{result.get('verify', {}).get('decode_errors', 0)} decode errors in the output")
             # Files that need an intact sibling are not "failed" — they are one file away from
             # being repairable. Grouping them apart keeps a red FAILED for real impossibilities.
-            if "--reference" in why or d.severity.needs_reference:
+            # "Needs a reference" is only honest when there is still a payload to graft onto: a
+            # file whose boxes are unreadable at offset 0 has nothing a reference could repair.
+            has_payload = any(a.type == "mdat" for a in getattr(d, "atoms", None) or [])
+            if "--reference" in why or (d.severity.needs_reference and has_payload):
                 need_ref.append((f, why))
                 if not args.quiet:
                     print(f"  {counter} {paint('need-ref', 'yellow')} {f.name:<44} "

@@ -1,3 +1,5 @@
+import types
+
 from mediarescue.cli import main
 
 
@@ -53,6 +55,7 @@ def test_a_batch_separates_needs_reference_from_failed(tmp_path, capsys, monkeyp
     class _Diagnosis:
         severity = cli.Severity.MISSING_ATOMS
         needs_reference = True
+        atoms = [types.SimpleNamespace(type="mdat")]
 
     monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
     monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)
@@ -67,6 +70,31 @@ def test_a_batch_separates_needs_reference_from_failed(tmp_path, capsys, monkeyp
     assert "FAILED" not in out
     assert "how to fix the other 1" in out
     assert "--reference" in out
+
+
+def test_a_file_with_no_readable_payload_is_a_real_failure(tmp_path, capsys, monkeypatch):
+    """`missing-atoms` usually means "one reference away", but not when not a single box parses:
+    there is nothing for a reference to be grafted onto, so promising one would be a lie."""
+    from mediarescue import cli
+
+    broken = tmp_path / "broken.mp4"
+    broken.write_bytes(b"garbage that reads as nothing")
+
+    class _Diagnosis:
+        severity = cli.Severity.MISSING_ATOMS
+        needs_reference = True
+        atoms = []
+
+    monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
+    monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)
+    monkeypatch.setattr(cli, "_repair",
+                        lambda src, out, args, d: {"ok": False, "strategy": "graft",
+                                                   "reason": "damaged file has no top-level mdat"})
+
+    assert main(["fix", str(tmp_path)]) == 1
+    out = capsys.readouterr().out
+    assert "FAILED" in out and "no top-level mdat" in out
+    assert "need-ref" not in out
 
 
 def test_a_batch_with_nothing_left_out_is_exit_zero(tmp_path, capsys, monkeypatch):
