@@ -76,25 +76,32 @@ it, and the exit code is 1. It checks the folder repairs will write into — pas
 
 No flags to remember: run `mediarescue` with no arguments in a terminal and you get a menu.
 
-![mediarescue all-in-one menu: choose 2, type a folder, read the scan table, back to the menu](docs/menu.png)
+![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png)
 
 ```
-mediarescue 0.4.0 — all-in-one menu
+┌────────────────────────────────────────────────────────────────────────┐
+│ mediarescue 0.5.0                                                      │
+│ repair damaged video and audio files; originals are never touched      │
+└────────────────────────────────────────────────────────────────────────┘
 
-  1  Check this machine can repair files (doctor)
-  2  Scan a file or folder — what is wrong?
-  3  Repair one file
-  4  Repair every damaged file in a folder
-  5  Show the damage classes and what each repair does
-  0  Quit
+     1  Check this machine can repair files    verifies ffmpeg, ffprobe, disk space
+     2  Look at a file or folder               says what is wrong; changes nothing
+  ▶  3  Repair one file                        writes a new file, original untouched
+     4  Repair every damaged file in a folder  skips the healthy ones, repairs the rest
+     5  Show the damage classes and what each repair does
+     0  Quit                                   close the menu
 
-choice>
+  ↑/↓ move · Enter choose · 0 quits
 ```
 
-Each choice asks for the path it needs and then runs the same command you would have typed —
-the menu calls the CLI, it does not re-implement it, so the two can never disagree. `mediarescue
-menu` opens it explicitly. From a script (no terminal) a bare `mediarescue` prints the help and
-exits 2 instead of waiting for input.
+Use the arrow keys and press Enter, or just type the number and press Enter — whichever you
+prefer. Every row says what it does in plain words, so you never have to guess what "scan" or
+"fix" means. Each choice asks for the path it needs and then runs the same command you would have
+typed: the menu calls the CLI, it does not re-implement it, so the two can never disagree.
+
+`mediarescue menu` opens it explicitly. From a script (stdin or stdout not a terminal) a bare
+`mediarescue` prints the help and exits 2 instead of waiting for input, so nothing ever hangs.
+On a legacy console code page the frame falls back to `+ - |` characters instead of crashing.
 
 ## Quick start
 
@@ -107,14 +114,20 @@ mediarescue scan "D:/broken-file"
 ```
 
 ```
-healthy            305,314,172  yes  D:\broken-file\holiday.mp4
-corrupt-payload         92,464  yes  D:\broken-file\clip.mp4
+severity                bytes  fix  file
+corrupt-index         313,248  yes  C:\broken-file\clip.avi
+healthy                61,678  yes  C:\broken-file\holiday.mp4
+corrupt-index         266,260  yes  C:\broken-file\webcam.avi
 
-2 scanned, 1 damaged, 1 repairable, 0 need a reference file
+3 scanned, 2 damaged, 2 repairable, 0 need a reference file
+next: mediarescue fix "C:\broken-file" --out-dir "C:\broken-file\recovered"
 ```
 
-Columns: damage class, size in bytes, `yes`/`no` for repairable, path. Add `--out report.json`
-to keep the full details.
+Read it left to right: what is wrong, how big, whether it can be rebuilt (`fix` = yes/no, coloured
+green or red in a terminal), and which file. The last line tells you the exact command to run next,
+with your own path already filled in. Add `--out report.json` to keep the full details.
+
+![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png)
 
 That reads headers only. Add `--deep` to decode every file as well — slower, but it is the only
 way to catch damage inside MP3/MKV/AVI, or a junk payload hiding behind a perfect index:

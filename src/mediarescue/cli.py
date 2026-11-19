@@ -53,12 +53,16 @@ def cmd_scan(args) -> int:
             print(f"not found: {m}", file=sys.stderr)
         return 2
     paint = ui.colour_for(ui.enabled(override=False if args.no_color else None))
+    if not args.json:
+        print(paint(f"{'severity':<16} {'bytes':>12}  {'fix':<3}  file", "dim"))
     for f in iter_media(args.paths):
         d = diagnose(f, hash_file=args.hash, deep=args.deep, deep_seconds=args.deep_seconds)
         rows.append(d)
         if not args.json:
             label = paint(f"{d.severity.value:<16}", SEVERITY_COLOUR.get(d.severity, ""))
-            print(f"{label} {d.size:>12,}  {'yes' if d.recoverable else 'no ':<3}  {f}")
+            fixable = paint(f"{'yes' if d.recoverable else 'no ':<3}",
+                            "green" if d.recoverable else "red")
+            print(f"{label} {d.size:>12,}  {fixable}  {f}")
     if args.json:
         print(json.dumps([d.to_dict() for d in rows], indent=2))
     if args.out:
@@ -66,9 +70,27 @@ def cmd_scan(args) -> int:
         print(f"\nwrote {args.out} ({len(rows)} files)", file=sys.stderr)
     if not args.json:
         bad = [d for d in rows if d.severity != Severity.HEALTHY]
-        print(f"\n{len(rows)} scanned, {len(bad)} damaged, "
-              f"{sum(1 for d in bad if d.recoverable)} repairable, "
-              f"{sum(1 for d in bad if d.needs_reference)} need a reference file")
+        repairable = [d for d in bad if d.recoverable]
+        if not rows:
+            print("\n" + paint("0 scanned: no video or audio files found here", "yellow"))
+            return 0
+        if not bad:
+            print("\n" + paint(f"all {len(rows)} file(s) look fine; nothing to repair", "green"))
+            return 0
+        print("\n" + paint(f"{len(rows)} scanned, {len(bad)} damaged, "
+                           f"{len(repairable)} repairable, "
+                           f"{sum(1 for d in bad if d.needs_reference)} need a reference file",
+                           "yellow" if repairable else "red"))
+        # Say the next command out loud: the commonest stall is not knowing what to type next.
+        first = Path(args.paths[0])
+        where = first if first.is_dir() else first.parent
+        if repairable:
+            print(f"next: mediarescue fix \"{where}\" --out-dir \"{where / 'recovered'}\"")
+        missing_ref = [d for d in bad if d.needs_reference]
+        if missing_ref:
+            print("those need --reference: an intact file recorded the same way, see --help")
+        if not repairable and not missing_ref:
+            print("nothing here can be rebuilt: the payload itself is gone")
     return 0
 
 
@@ -252,6 +274,12 @@ def _fix_single(src: Path, args) -> int:
         print(f"refusing: {d.severity.value} is not repairable by this tool "
               f"(no stream payload to rebuild from)", file=sys.stderr)
         return 2
+    if d.severity == Severity.HEALTHY and not getattr(args, "force", False):
+        # Rewriting a healthy file produced a byte-for-byte equivalent copy and took minutes on a
+        # large one; say so instead, and leave --force for the deliberate case.
+        print(paint("nothing to repair: this file already reads cleanly "
+                    "(use --force to rewrite it anyway)", "green"))
+        return 0
     if not have_ffmpeg():
         print("ffmpeg/ffprobe not found on PATH", file=sys.stderr)
         return 3
@@ -382,7 +410,7 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("-o", "--out", help="output file (single input only)")
     f.add_argument("--out-dir", help="batch: write repaired files into this folder")
     f.add_argument("--force", action="store_true",
-                   help="batch: also rewrite files that scan calls healthy")
+                   help="repair files that scan calls healthy instead of skipping them")
     f.add_argument("--quiet", action="store_true",
                    help="print only failures and the summary")
     f.add_argument("--verbose", action="store_true",

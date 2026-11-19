@@ -17,6 +17,7 @@ _CODES = {
     "cyan": "36",
     "dim": "2",
     "bold": "1",
+    "reverse": "7",
 }
 
 

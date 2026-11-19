@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.5.0
+
+Everything here came from running the tool on real damaged files, one command at a time, and
+reading the output as a beginner would.
+
+**Menu**
+- Arrow-key navigation: the selected row is a solid highlighted bar, with `↑/↓ move · Enter choose`
+  printed underneath. Typing a number still works, so both habits are fine.
+- Every row now carries a plain-language hint (`writes a new file, original untouched`), and the
+  rows are worded as actions rather than tool names.
+- The menu is framed with a title and one-line explanation of what the program does.
+- **Fixed:** the highlight was a reverse span wrapped around coloured spans, and the first inner
+  reset cancelled it — on a real terminal the selected row was never actually highlighted. It is
+  now built from uncoloured text and wrapped once.
+- **Fixed:** on a legacy console code page the box-drawing characters raised `UnicodeEncodeError`
+  and killed the menu. The frame now falls back to `+ - |`.
+
+**Scan**
+- A header row (`severity / bytes / fix / file`) so the table explains itself; severity is
+  coloured by damage class and the `fix` column is green or red.
+- A `next:` line with the exact command to run against what was just scanned.
+- A folder with nothing to scan says so in plain words instead of printing an empty table.
+
+**Repair**
+- A file that scans healthy is no longer rewritten: it prints `nothing to repair: this file
+  already reads cleanly (use --force to rewrite it anyway)` and exits 0. Copying a healthy
+  multi-gigabyte file byte for byte took minutes and achieved nothing.
+- `--force` keeps the deliberate case, described as *repair files that scan calls healthy instead
+  of skipping them*.
+
 ## 0.4.0
 
 **All-in-one menu**

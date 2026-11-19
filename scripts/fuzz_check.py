@@ -130,7 +130,12 @@ def main():
                     findings.append(("false success", case.name, 0,
                                      f"{len(errs)} decode errors, first: {errs[0][:120]}"))
             elif q.returncode == 0 and not out.exists():
-                findings.append(("missing output", case.name, 0, blob[-200:]))
+                # a healthy input is deliberately left alone: no output file is the correct answer
+                if "nothing to repair" not in blob:
+                    findings.append(("missing output", case.name, 0, blob[-200:]))
+                else:
+                    outcomes["healthy-input left alone"] = outcomes.get(
+                        "healthy-input left alone", 0) + 1
 
     print(f"\n{checked} cases, {len(findings)} finding(s)")
     print("outcomes:", ", ".join(f"{k}={v}" for k, v in outcomes.items()))
