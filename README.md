@@ -448,6 +448,7 @@ Format specs and prior art this tool is built on:
 
 ```bash
 pip install -e .[dev]
+ruff check .                        # the rule set is pinned in pyproject.toml
 python -m pytest                    # fixtures are generated with ffmpeg; those tests skip without it
 python scripts/acceptance_check.py  # drives an installed CLI end to end, exit codes included
 python scripts/fuzz_check.py        # damages 7 file types 10 ways each; any traceback or false "fixed" fails

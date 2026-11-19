@@ -98,7 +98,7 @@ def test_the_hint_column_does_not_shift_on_the_highlighted_row():
     import re
     paint = ui.colour_for(True)
     rows = [re.sub(r"\033\[[0-9;]*m", "", row) for row in menu_mod._choice_lines(paint, 3)]
-    starts = {row.index(menu_mod.HINTS[key]) for row, (key, _) in zip(rows, CHOICES)}
+    starts = {row.index(menu_mod.HINTS[key]) for row, (key, _) in zip(rows, CHOICES, strict=True)}
     assert len(starts) == 1, starts
 
 
@@ -276,7 +276,7 @@ def test_a_script_gets_help_instead_of_a_menu(capsys):
 
 def test_python_dash_m_reaches_the_same_tool():
     out = subprocess.run([sys.executable, "-m", "mediarescue", "--version"],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, check=False)
     assert out.returncode == 0
     assert out.stdout.startswith("mediarescue ")
 

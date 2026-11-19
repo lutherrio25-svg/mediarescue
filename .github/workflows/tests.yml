@@ -5,6 +5,20 @@ on:
   pull_request:
 
 jobs:
+  # Cheapest job first, and it needs no ffmpeg: a style or dead-import regression should not cost
+  # six pytest runs to surface.
+  lint:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --quiet ruff==0.17.5
+      - run: ruff check .
+      - run: bash -n scripts/ci_install_ffmpeg.sh
+
   pytest:
     timeout-minutes: 40
     strategy:

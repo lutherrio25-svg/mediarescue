@@ -152,10 +152,9 @@ def parse_sequence_header(payload: bytes) -> dict:
                 r.u(4)
     wb, hb = r.u(4) + 1, r.u(4) + 1
     width, height = r.u(wb) + 1, r.u(hb) + 1
-    if not reduced:
-        if r.u(1):  # frame_id_numbers_present_flag
-            r.u(4)
-            r.u(3)
+    if not reduced and r.u(1):  # frame_id_numbers_present_flag
+        r.u(4)
+        r.u(3)
     r.u(3)  # use_128x128, enable_filter_intra, enable_intra_edge
     order_hint = 0
     if not reduced:
@@ -164,9 +163,8 @@ def parse_sequence_header(payload: bytes) -> dict:
         if order_hint:
             r.u(2)  # jnt_comp, ref_frame_mvs
         force_sct = 2 if r.u(1) else r.u(1)
-        if force_sct > 0:
-            if not r.u(1):  # seq_choose_integer_mv
-                r.u(1)
+        if force_sct > 0 and not r.u(1):  # seq_choose_integer_mv
+            r.u(1)
         if order_hint:
             r.u(3)
     r.u(3)  # superres, cdef, restoration
@@ -195,8 +193,9 @@ def parse_sequence_header(payload: bytes) -> dict:
             subx, suby = 1, 0
         if subx and suby:
             csp = r.u(2)
-    return dict(profile=profile, level=level, tier=tier, width=width, height=height,
-                high_bitdepth=high, twelve_bit=twelve, mono=mono, subx=subx, suby=suby, csp=csp)
+    return {"profile": profile, "level": level, "tier": tier, "width": width,
+            "height": height, "high_bitdepth": high, "twelve_bit": twelve, "mono": mono,
+            "subx": subx, "suby": suby, "csp": csp}
 
 
 def find_sequence_header(sample: bytes) -> tuple[dict, bytes] | None:

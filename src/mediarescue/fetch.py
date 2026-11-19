@@ -417,7 +417,5 @@ def download(url: str, dest_dir: Path, name_hint: str = "reference.mp4", report=
 
 def cleanup(path: Path) -> None:
     """Remove a downloaded reference and the folder that held it."""
-    try:
-        shutil.rmtree(Path(path).parent, ignore_errors=True)
-    except OSError:
-        pass
+    # ignore_errors already swallows everything rmtree can raise, so nothing to catch.
+    shutil.rmtree(Path(path).parent, ignore_errors=True)

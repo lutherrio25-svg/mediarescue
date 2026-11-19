@@ -28,7 +28,7 @@ def run_mp3val(tool: str, path: Path, timeout: int = 900) -> tuple[bool, str]:
     """`mp3val -f -nb` rewrites the file in place, so callers must pass a copy."""
     try:
         p = subprocess.run([tool, "-f", "-nb", str(path)], capture_output=True, text=True,
-                           timeout=timeout, errors="replace")
+                           timeout=timeout, errors="replace", check=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, f"{type(exc).__name__}: {exc}"
     log = ((p.stdout or "") + (p.stderr or "")).strip()

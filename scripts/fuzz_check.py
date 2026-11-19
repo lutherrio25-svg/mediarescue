@@ -39,7 +39,7 @@ def make_fixtures(d: Path):
         if target.exists():
             continue
         p = subprocess.run(["ffmpeg", "-v", "error", "-y", *args, str(target)],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, check=False)
         if p.returncode != 0:
             print(f"  fixture {name} skipped: {p.stderr.strip()[:90]}")
 
@@ -79,8 +79,8 @@ def mutate(src: Path, dst: Path, kind: str, rng: random.Random):
 
 
 def run(args, timeout=180):
-    return subprocess.run(CLI + args, capture_output=True, text=True, timeout=timeout,
-                          errors="replace")
+    return subprocess.run([*CLI, *args], capture_output=True, text=True, timeout=timeout,
+                          errors="replace", check=False)
 
 
 def main():
@@ -124,7 +124,7 @@ def main():
             elif q.returncode == 0 and out.exists():
                 # exit 0 must mean the file it produced really decodes
                 v = subprocess.run(["ffmpeg", "-v", "error", "-i", str(out), "-f", "null", "-"],
-                                   capture_output=True, text=True)
+                                   capture_output=True, text=True, check=False)
                 errs = [ln for ln in v.stderr.splitlines() if ln.strip()]
                 if errs:
                     findings.append(("false success", case.name, 0,

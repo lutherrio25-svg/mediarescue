@@ -3,12 +3,17 @@ import subprocess
 
 import pytest
 
-from mediarescue.av1 import (build_av01_stsd, find_sequence_header, is_av1_sample,
-                             is_avc_sample, sniff_video_codec)
+from mediarescue.av1 import (
+    build_av01_stsd,
+    find_sequence_header,
+    is_av1_sample,
+    is_avc_sample,
+    sniff_video_codec,
+)
 from mediarescue.ffmpeg import have_ffmpeg
 
 have_av1 = have_ffmpeg() and "libaom-av1" in subprocess.run(
-    ["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True).stdout
+    ["ffmpeg", "-hide_banner", "-encoders"], capture_output=True, text=True, check=False).stdout
 needs_av1 = pytest.mark.skipif(not have_av1, reason="ffmpeg without libaom-av1")
 
 
@@ -74,7 +79,7 @@ def test_av1_keyframes_are_found_and_salvage_cuts_to_one(tmp_path):
 
     def decode_errors(path):
         p = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, check=False)
         return len([ln for ln in p.stderr.splitlines() if not ln.startswith("[null @")])
 
     clip = tmp_path / "g.mp4"
@@ -84,7 +89,7 @@ def test_av1_keyframes_are_found_and_salvage_cuts_to_one(tmp_path):
 
     buf = clip.read_bytes()
     moov = locate_moov(buf)
-    trak = [b for b in read_boxes(buf, moov.payload, moov.end) if b.type == "trak"][0]
+    trak = next(b for b in read_boxes(buf, moov.payload, moov.end) if b.type == "trak")
     table = sample_table(buf, trak)
     flags = [av1_is_keyframe(buf[s["offset"]:s["offset"] + s["size"]]) for s in table["samples"]]
     assert flags[0] is True and flags.count(True) >= 3

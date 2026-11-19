@@ -28,7 +28,8 @@ def run(cli: str, *args: str, env: dict | None = None, timeout: int = 600):
     e = dict(os.environ)
     if env:
         e.update(env)
-    return subprocess.run([cli, *args], capture_output=True, text=True, env=e, timeout=timeout)
+    return subprocess.run([cli, *args], capture_output=True, text=True, env=e, timeout=timeout,
+                   check=False)
 
 
 def check(name: str, fn) -> None:
@@ -36,13 +37,13 @@ def check(name: str, fn) -> None:
         results.append((name, True, fn() or ""))
     except AssertionError as exc:
         results.append((name, False, str(exc)[:150]))
-    except Exception as exc:  # noqa: BLE001 - any crash is a failed check, not a crashed run
+    except Exception as exc:  # any crash is a failed check, not a crashed run
         results.append((name, False, f"{type(exc).__name__}: {exc}"[:150]))
 
 
 def decode_errors(path: Path) -> int:
     p = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, check=False)
     return len([ln for ln in p.stderr.splitlines() if not ln.startswith("[null @")])
 
 
@@ -55,7 +56,7 @@ def make_clip(path: Path, seconds=4, audio=True, repeat=True) -> None:
         cmd += ["-x264-params", "repeat-headers=1"]
     if audio:
         cmd += ["-c:a", "aac", "-b:a", "64k"]
-    subprocess.run(cmd + [str(path)], check=True, capture_output=True)
+    subprocess.run([*cmd, str(path)], check=True, capture_output=True)
 
 
 def corrupt_head(path: Path, fraction=0.35, seed=5) -> None:

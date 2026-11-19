@@ -229,7 +229,7 @@ def flatten(damaged: Path, reference: Path, out: Path, force_timescale: int | No
         return {"ok": False, "reason": "no moof/traf samples found"}
     in_bounds, dropped = [], 0
     for t in tracks.values():
-        good = [s for s in t.samples if 0 <= s.offset and s.offset + s.size <= len(buf)]
+        good = [s for s in t.samples if s.offset >= 0 and s.offset + s.size <= len(buf)]
         dropped += len(t.samples) - len(good)
         if good:
             t.samples = good  # truncated final fragment: keep the decodable prefix
@@ -388,7 +388,7 @@ def flatten(damaged: Path, reference: Path, out: Path, force_timescale: int | No
     mdat_payload = len(ftyp) + len(moov) + 8
     offset = mdat_payload
     trak_start = 8 + len(mvhd)  # moov header + mvhd, then traks in order
-    for (trak_index, pos), payload in zip(stco_positions, payloads):
+    for (trak_index, pos), payload in zip(stco_positions, payloads, strict=False):
         base = trak_start + sum(len(t) for t in new_traks[:trak_index])
         struct.pack_into(">I", moov, base + pos, offset)
         offset += len(payload)

@@ -31,10 +31,19 @@ Issues = "https://github.com/lutherrio25-svg/mediarescue/issues"
 Changelog = "https://github.com/lutherrio25-svg/mediarescue/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff==0.17.5"]
 
 [project.scripts]
 mediarescue = "mediarescue.cli:main"
+
+[tool.ruff]
+# Pinned so a ruff upgrade cannot turn main red without a commit that says so.
+line-length = 100
+target-version = "py310"
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W", "I", "B", "UP", "SIM", "RUF", "PLW", "ISC", "FURB", "C4"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

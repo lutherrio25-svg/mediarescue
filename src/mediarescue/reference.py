@@ -150,9 +150,9 @@ def find_reference(src: Path, limit: int = 40, depth: int = 2) -> Path | None:
         elif not _same_upload(src, candidate):
             # No codec, no shared name: only an almost identical size is left to go on, and that
             # is a guess -- kept as a last resort, behind anything that looks more like a twin.
-            if fallback is None and _size_alone(src, candidate):
-                if diagnose(candidate, hash_file=False).severity == Severity.HEALTHY:
-                    fallback = candidate
+            if (fallback is None and _size_alone(src, candidate)
+                    and diagnose(candidate, hash_file=False).severity == Severity.HEALTHY):
+                fallback = candidate
             continue
         if diagnose(candidate, hash_file=False).severity != Severity.HEALTHY:
             continue

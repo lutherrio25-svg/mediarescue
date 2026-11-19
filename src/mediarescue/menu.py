@@ -15,8 +15,8 @@ session without a terminal.
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from . import __version__, ui
 

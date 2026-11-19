@@ -36,7 +36,7 @@ def corrupt_head(path, fraction=0.3, seed=7):
 
 def decode_errors(path) -> str:
     p = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, check=False)
     return p.stderr.strip()
 
 
@@ -47,7 +47,7 @@ def test_sample_table_matches_probe(tmp_path):
     buf = clip.read_bytes()
     moov = find(buf, "moov")
     assert moov is not None
-    video = [b for b in read_boxes(buf, moov.payload, moov.end) if b.type == "trak"][0]
+    video = next(b for b in read_boxes(buf, moov.payload, moov.end) if b.type == "trak")
     table = sample_table(buf, video)
     assert table["handler"] == b"vide"
     assert len(table["samples"]) == 100  # 4s at 25fps

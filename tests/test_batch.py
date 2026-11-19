@@ -16,7 +16,7 @@ def make_clip(path, seconds=3, repeat_headers=False):
            "-c:v", "libx264", "-g", "10", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "64k"]
     if repeat_headers:
         cmd[-1:-1] = ["-x264-params", "repeat-headers=1"]
-    subprocess.run(cmd + [str(path)], check=True, capture_output=True)
+    subprocess.run([*cmd, str(path)], check=True, capture_output=True)
 
 
 def corrupt_head(path, fraction=0.35, seed=3):
@@ -49,7 +49,7 @@ def build_folder(tmp_path):
 
 @needs_ffmpeg
 def test_batch_repairs_damaged_and_leaves_healthy_alone(tmp_path, capsys):
-    good, damaged, hopeless = build_folder(tmp_path)
+    good, _damaged, hopeless = build_folder(tmp_path)
     hopeless.unlink()                       # nothing must fail for this test to mean anything
     before = (good.stat().st_size, good.stat().st_mtime_ns)
 
@@ -67,7 +67,7 @@ def test_batch_repairs_damaged_and_leaves_healthy_alone(tmp_path, capsys):
 def test_batch_reports_a_real_dead_end_and_still_exits_nonzero(tmp_path, capsys):
     """`hopeless.mp4` has payload but no box structure at all, so no reference could be grafted
     onto it — that is a real failure, and the batch must say so without promising a fix."""
-    _, damaged, _ = build_folder(tmp_path)
+    _, _damaged, _ = build_folder(tmp_path)
 
     assert main(["fix", str(tmp_path)]) == 1
     out = capsys.readouterr().out
@@ -79,7 +79,7 @@ def test_batch_reports_a_real_dead_end_and_still_exits_nonzero(tmp_path, capsys)
 
 @needs_ffmpeg
 def test_batch_out_dir_keeps_the_source_folder_clean(tmp_path, capsys):
-    _, damaged, _ = build_folder(tmp_path)
+    _, _damaged, _ = build_folder(tmp_path)
     target = tmp_path / "fixed"
 
     assert main(["fix", str(tmp_path), "--out-dir", str(target)]) in (0, 1)
@@ -97,6 +97,6 @@ def test_out_flag_is_refused_for_a_batch(tmp_path, capsys):
 
 @needs_ffmpeg
 def test_force_rewrites_healthy_files_too(tmp_path, capsys):
-    good, _, _ = build_folder(tmp_path)
+    _good, _, _ = build_folder(tmp_path)
     assert main(["fix", str(tmp_path), "--force", "--out-dir", str(tmp_path / "all")]) in (0, 1)
     assert (tmp_path / "all" / "good.repaired.mp4").exists()

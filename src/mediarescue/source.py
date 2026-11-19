@@ -51,8 +51,10 @@ NOISE_WORDS = {
 }
 BRACKETED = re.compile(r"[\[\(\{][^\]\)\}]{1,24}[\]\)\}]")
 HANDLE = re.compile(r"@[\w.]+")
-DOTTED = re.compile(r"^[\w-]+\.(?:com|net|org|xyz|cc|to|io|me|tv|app|link|club|top|vip)$", re.I)
-SEPARATORS = re.compile(r"[._\-–—|]+")
+DOTTED = re.compile(r"^[\w-]+\.(?:com|net|org|xyz|cc|to|io|me|tv|app|link|club|top|vip)$", re.IGNORECASE)
+# En and em dashes are separators here, not confusable prose characters: this regex is about
+# punctuation between title words, so RUF001's "did you mean a hyphen" is the wrong question.
+SEPARATORS = re.compile(r"[._\-–—|]+")  # noqa: RUF001
 
 
 @dataclass
@@ -144,7 +146,7 @@ def parse_ddg(html: str) -> list[str]:
 def parse_bing(html: str) -> list[str]:
     """Bing hides the real target in `ck/a?...&u=a1<base64url>`; decode it back out."""
     urls: list[str] = []
-    for block in re.findall(r'<li class="b_algo".*?</li>', html, re.S):
+    for block in re.findall(r'<li class="b_algo".*?</li>', html, re.DOTALL):
         raw = re.search(r"[?&]u=a1([A-Za-z0-9_\-%]+)", block)
         if raw:
             value = urllib.parse.unquote(raw.group(1))
@@ -239,7 +241,7 @@ def _search_tvly(query: str) -> list[str]:
     """The `tvly` CLI, when the user already has it signed in -- no key to paste."""
     command = [*_tvly_command(), "search", query.replace('"', " "), "--json"]
     try:
-        finished = subprocess.run(command, capture_output=True, text=True, timeout=90)
+        finished = subprocess.run(command, capture_output=True, text=True, timeout=90, check=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise fetch.FetchError(f"tvly could not run: {exc}") from exc
     if finished.returncode != 0:
@@ -268,7 +270,7 @@ BACKENDS = (
 )
 
 
-JUNK_RESULT = re.compile(r"\.(?:css|js|png|jpe?g|gif|svg|ico|woff2?|json|xml)(?:\?|$)", re.I)
+JUNK_RESULT = re.compile(r"\.(?:css|js|png|jpe?g|gif|svg|ico|woff2?|json|xml)(?:\?|$)", re.IGNORECASE)
 ENGINE_HOSTS = ("bing.com", "google.", "duckduckgo.com", "microsoft.com", "yahoo.com")
 
 
@@ -305,10 +307,10 @@ def search(query: str) -> list[str]:
 
 # --------------------------------------------------------------------------- harvesting
 
-MEDIA_LINK = re.compile(r'https?://[^\s"\'<>]+?\.(?:mp4|mkv|m4v|webm|mov)(?:\?[^\s"\'<>]*)?', re.I)
-SHARE_LINK = re.compile(r'https?://[^\s"\'<>]+', re.I)
+MEDIA_LINK = re.compile(r'https?://[^\s"\'<>]+?\.(?:mp4|mkv|m4v|webm|mov)(?:\?[^\s"\'<>]*)?', re.IGNORECASE)
+SHARE_LINK = re.compile(r'https?://[^\s"\'<>]+', re.IGNORECASE)
 RELATIVE_MEDIA = re.compile(
-    r'(?:src|href)=["\']((?!https?:|//)[^"\']+?\.(?:mp4|mkv|m4v|webm|mov)(?:\?[^"\']*)?)["\']', re.I)
+    r'(?:src|href)=["\']((?!https?:|//)[^"\']+?\.(?:mp4|mkv|m4v|webm|mov)(?:\?[^"\']*)?)["\']', re.IGNORECASE)
 
 
 def extract_media_links(html: str, base: str = "") -> list[str]:
@@ -357,7 +359,7 @@ def rank(candidates: list[str], identity: Identity) -> list[str]:
         name = re.sub(r"[^a-z0-9]", "", urllib.parse.urlsplit(lowered).path.rsplit("/", 1)[-1])
         hits = sum(1 for w in words if w in lowered)
         title_in_name = 3 if squash and squash[:12] in name else 0
-        is_share = 1 if any(h in lowered for h in fetch.TERABOX_HOSTS + (
+        is_share = 1 if any(h in lowered for h in (*fetch.TERABOX_HOSTS,
             "mediafire.com", "pixeldrain.com", "gofile.io")) else 0
         return (hits + title_in_name + is_share, -len(url))
 
@@ -417,7 +419,8 @@ def plausible(candidate: Path, identity: Identity, probe=None) -> tuple[bool, st
     if not info.get("ok"):
         return False, "downloaded file does not probe"
     if identity.duration and info.get("duration"):
-        if abs(float(info["duration"]) - identity.duration) > max(2.0, identity.duration * 0.02):
+        allowed = max(2.0, identity.duration * 0.02)
+        if abs(float(info["duration"]) - identity.duration) > allowed:
             return False, (f"duration differs ({info['duration']:.1f}s vs "
                            f"{identity.duration:.1f}s)")
     if identity.height and info.get("height") and int(info["height"]) != identity.height:

@@ -6,9 +6,9 @@ import pytest
 
 from mediarescue.carve import carve
 from mediarescue.cli import main
+from mediarescue.diagnose import diagnose
 from mediarescue.ffmpeg import have_ffmpeg, probe
 from mediarescue.report import Severity
-from mediarescue.diagnose import diagnose
 
 needs_ffmpeg = pytest.mark.skipif(not have_ffmpeg(), reason="ffmpeg/ffprobe not on PATH")
 

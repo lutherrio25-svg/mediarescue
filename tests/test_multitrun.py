@@ -29,7 +29,7 @@ def build(layout):
     tfhd = full(b"tfhd", 0x020000, struct.pack(">I", 1))  # default-base-is-moof
     # first pass with zero offsets to learn the moof size
     def moof_with(offsets):
-        truns = b"".join(trun(o, sizes) for o, (_, sizes) in zip(offsets, layout))
+        truns = b"".join(trun(o, sizes) for o, (_, sizes) in zip(offsets, layout, strict=False))
         traf = box(b"traf", tfhd + truns)
         return box(b"moof", box(b"mfhd", b"\0" * 8) + traf)
 

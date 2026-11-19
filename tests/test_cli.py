@@ -1,4 +1,5 @@
 import types
+from typing import ClassVar
 
 from mediarescue.cli import main
 
@@ -55,7 +56,7 @@ def test_a_batch_separates_needs_reference_from_failed(tmp_path, capsys, monkeyp
     class _Diagnosis:
         severity = cli.Severity.MISSING_ATOMS
         needs_reference = True
-        atoms = [types.SimpleNamespace(type="mdat")]
+        atoms: ClassVar[list] = [types.SimpleNamespace(type="mdat")]
 
     monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
     monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)
@@ -83,7 +84,7 @@ def test_a_file_with_no_readable_payload_is_a_real_failure(tmp_path, capsys, mon
     class _Diagnosis:
         severity = cli.Severity.MISSING_ATOMS
         needs_reference = True
-        atoms = []
+        atoms: ClassVar[list] = []
 
     monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
     monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)

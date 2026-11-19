@@ -17,7 +17,7 @@ def server():
     routes: dict[str, tuple[str, bytes]] = {}
 
     class Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self):                                    # noqa: N802
+        def do_GET(self):
             content_type, payload = routes.get(self.path.split("?")[0], ("text/html", HTML_BYTES))
             self.send_response(200)
             self.send_header("Content-Type", content_type)

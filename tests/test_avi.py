@@ -39,7 +39,7 @@ def shift_entries(path, delta=64):
 
 def decode_errors(path):
     p = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, check=False)
     return len([ln for ln in p.stderr.splitlines() if ln.strip()])
 
 

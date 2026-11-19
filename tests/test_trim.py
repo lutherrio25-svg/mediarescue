@@ -1,13 +1,13 @@
 import struct
 
 import pytest
+from test_core import make_mp4
 
 from mediarescue.diagnose import diagnose
 from mediarescue.ffmpeg import have_ffmpeg, probe, remux
 from mediarescue.mp4 import read_boxes
 from mediarescue.report import Severity
 from mediarescue.trim import trim_mdat
-from test_core import make_mp4
 
 needs_ffmpeg = pytest.mark.skipif(not have_ffmpeg(), reason="ffmpeg not installed")
 

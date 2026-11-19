@@ -17,7 +17,7 @@ def decodes_clean(path):
     """Full decode with zero errors. ffprobe alone only reads headers and let a
     structurally-broken flatten() result through."""
     p = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-f", "null", "-"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, check=False)
     return p.returncode == 0 and not p.stderr.strip(), p.stderr[-400:]
 
 

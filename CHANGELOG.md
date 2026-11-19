@@ -21,6 +21,13 @@ Small things that made the tool feel unfinished, plus two rules that were quietl
   covered by tests that measure the frame's width and the hint column.
 - A second download of the same name prints `another candidate:` instead of a second
   `original found:`, and the unused imports the linter kept finding are gone.
+- **`ruff check .` passes, and CI now runs it.** The rule set lives in `pyproject.toml` next to a
+  pinned ruff, so an upgrade cannot turn `main` red without a commit that says so: unused imports,
+  a duplicated `binascii` handler, `not x in y`, dead `try/except` around `ignore_errors=True`, and
+  regex flags spelled `re.I` are all gone. Lint runs first in CI, without ffmpeg, because a style
+  regression should not cost six pytest runs to surface.
+- **The Linux ffmpeg install retries instead of trusting one download.** A dropped apt connection
+  used to fail a job for reasons that had nothing to do with this project.
 
 ## 0.7.2
 

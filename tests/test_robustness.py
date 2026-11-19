@@ -4,6 +4,7 @@ Every parser here is fed random payloads and deliberately broken box structures.
 raise, because the CLI would show a traceback instead of a verdict. `iter_obus` is the one
 documented exception: it validates and raises `ValueError`, and every caller catches it.
 """
+import contextlib
 import random
 import struct
 
@@ -75,10 +76,8 @@ def test_iter_obus_raises_only_valueerror():
     rng = random.Random(9)
     for _ in range(300):
         data = bytes(rng.randrange(256) for _ in range(rng.randrange(0, 200)))
-        try:
+        with contextlib.suppress(ValueError):
             list(av1.iter_obus(data))
-        except ValueError:
-            pass
 
 
 def test_sniff_accepts_a_single_sample_as_bytes():

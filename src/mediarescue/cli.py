@@ -40,12 +40,13 @@ def iter_media(paths: list[str]):
         p = Path(raw)
         if p.is_dir():
             for f in sorted(p.rglob("*")):
-                if f.is_file() and f.suffix.lower() in MEDIA_SUFFIXES:
-                    # Only the path *below* the requested root is filtered, so a
-                    # root that itself lives under AppData still scans.
-                    if not any(part.lower() in SKIP_DIRS for part in f.relative_to(p).parts) \
-                            and not _owns_output(f.name):
-                        yield f
+                if not (f.is_file() and f.suffix.lower() in MEDIA_SUFFIXES):
+                    continue
+                # Only the path *below* the requested root is filtered, so a
+                # root that itself lives under AppData still scans.
+                if not any(part.lower() in SKIP_DIRS for part in f.relative_to(p).parts) \
+                        and not _owns_output(f.name):
+                    yield f
         elif p.is_file():
             yield p
         else:
@@ -205,7 +206,7 @@ def _online_references(src: Path, args):
     cache = getattr(args, "_source_cache", None)
     if cache is None:
         cache = {}
-        setattr(args, "_source_cache", cache)
+        args._source_cache = cache
     quiet = getattr(args, "quiet", False)
     paint = ui.colour_for(ui.enabled(override=False if getattr(args, "no_color", False) else None))
 
@@ -278,7 +279,7 @@ def _online_references(src: Path, args):
         # wording reads like the tool found it twice.
         label = "original found" if found == 1 else "another candidate"
         say(f"  {label}: {path.name} ({fetch.describe(path.stat().st_size)}) — {why}")
-        setattr(args, "_online", str(path))
+        args._online = str(path)
         getattr(args, "_fetched", []).append(path)
         cache[key] = path
         yield path
@@ -408,7 +409,7 @@ def cmd_source(args) -> int:
     fix_args.out_dir = None
     fix_args.reference = None
     fix_args.no_color = getattr(args, "no_color", False)
-    fix_args.brief = True if not getattr(args, "json", False) else False
+    fix_args.brief = not getattr(args, "json", False)
     return cmd_fix(fix_args)
 
 
@@ -563,7 +564,7 @@ def _fix_batch(targets: list[Path], args) -> int:
     paint = ui.colour_for(ui.enabled(override=False if getattr(args, "no_color", False) else None))
     out_dir = Path(args.out_dir).resolve() if args.out_dir else None
     files = [f for f in iter_media([str(t) for t in targets])
-             if out_dir is None or not out_dir in [f.resolve(), *f.resolve().parents]]
+             if out_dir is None or out_dir not in [f.resolve(), *f.resolve().parents]]
     repaired, failed, need_ref, skipped = [], [], [], []
     total = len(files)
 

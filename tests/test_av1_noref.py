@@ -18,7 +18,7 @@ def _av1_fragment(dst):
                         "-i", "testsrc=size=160x96:rate=10", "-t", "3", "-c:v", "libaom-av1",
                         "-cpu-used", "8", "-crf", "45", "-g", "10",
                         "-movflags", "frag_keyframe+empty_moov+default_base_moof", str(dst)],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, check=False)
     if p.returncode != 0:
         pytest.skip(f"libaom-av1 unavailable: {p.stderr.strip()[:80]}")
     data = dst.read_bytes()

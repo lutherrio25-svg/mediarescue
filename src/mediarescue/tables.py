@@ -132,8 +132,8 @@ def head_is_junk(path) -> bool:
     cannot be read — an unknown is not an accusation.
     """
     try:
-        with open(path, "rb") as f:
-            with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+        with (open(path, "rb") as f,
+              mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm):
                 moov = locate_moov(mm)
                 if moov is None:
                     return False

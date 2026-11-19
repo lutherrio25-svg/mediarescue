@@ -173,7 +173,7 @@ def test_a_real_command_is_never_hijacked_by_the_no_argument_shortcut(tmp_path, 
 
 
 def test_the_menu_command_exists():
-    import mediarescue.cli as cli
+    from mediarescue import cli
 
     with pytest.raises(SystemExit):
         cli.main(["menu", "--help"])

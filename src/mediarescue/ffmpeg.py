@@ -15,7 +15,8 @@ def have_ffmpeg() -> bool:
 
 
 def run(cmd: list[str], timeout: int = 1800) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, errors="replace")
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                          errors="replace", check=False)
 
 
 def remux(src: Path, dst: Path, timeout: int = 1800, ignore_index: bool = False) -> tuple[bool, str]:
