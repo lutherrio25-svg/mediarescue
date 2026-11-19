@@ -88,3 +88,61 @@ def test_batch_uses_the_sibling_and_reports_it(tmp_path, capsys):
     assert '"reference"' in printed and "good.mp4" in printed
     assert '"strategy": "flatten"' in printed
     assert probe(out_dir / "frag.mp4")["ok"]
+
+
+def _healthy(monkeypatch, reference):
+    """Pretend every candidate near the damaged file is intact, without needing ffmpeg."""
+    from types import SimpleNamespace
+
+    from mediarescue.report import Severity
+    monkeypatch.setattr(reference, "diagnose",
+                        lambda p, hash_file=False: SimpleNamespace(severity=Severity.HEALTHY))
+
+
+def test_with_no_readable_codec_a_same_size_twin_is_still_used(tmp_path, monkeypatch):
+    """Index gone and payload unrecognisable: size is the only evidence left, so use it."""
+    from mediarescue import reference
+
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"\x00" * 1000)
+    twin = tmp_path / "unrelated name.mp4"
+    twin.write_bytes(b"\x00" * 1004)
+
+    monkeypatch.setattr(reference, "source_video_codec", lambda p: None)
+    _healthy(monkeypatch, reference)
+
+    assert reference.find_reference(src) == twin
+
+
+def test_the_program_never_borrows_its_own_repair_as_a_reference(tmp_path, monkeypatch):
+    """A `.repaired.mp4` beside the original is our output; grafting it back is a loop."""
+    from mediarescue import reference
+
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"\x00" * 1000)
+    ours = tmp_path / "clip.repaired.mp4"
+    ours.write_bytes(b"\x00" * 1000)
+    real = tmp_path / "clip twin.mp4"
+    real.write_bytes(b"\x00" * 1000)
+
+    monkeypatch.setattr(reference, "source_video_codec", lambda p: None)
+    _healthy(monkeypatch, reference)
+
+    assert reference.find_reference(src) == real
+
+
+def test_a_shared_name_beats_a_bare_size_match(tmp_path, monkeypatch):
+    from mediarescue import reference
+
+    src = tmp_path / "holiday clip 2019.mp4"
+    src.write_bytes(b"\x00" * 1000)
+    sized = tmp_path / "aaa.mp4"            # closer in size, nothing else in common
+    sized.write_bytes(b"\x00" * 1000)
+    named = tmp_path / "zzz holiday clip.mp4"   # further in size, but the same name
+    named.write_bytes(b"\x00" * 1080)
+
+    monkeypatch.setattr(reference, "source_video_codec", lambda p: None)
+    _healthy(monkeypatch, reference)
+
+    assert reference.find_reference(src) == named
+

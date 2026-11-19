@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.1
+
+Two gaps that made a repair give up while a usable reference was still within reach.
+
+- **A twin beside the file is used even when the damaged file cannot name its codec.** Picking a
+  reference used to require sniffing the video codec out of the damaged bytes; when the index is
+  gone *and* the payload has no anchored H.264 stream, that failed and the tool went straight to
+  the internet while an identical copy sat in the same folder. Now a healthy neighbour with the
+  same name and a near-identical size is tried, and an almost identical size alone is the last
+  resort — the repair is verified by a full decode either way.
+- **A downloaded candidate that does not decode costs the next candidate, not the repair.** The
+  size sieve decides what to *try*, never what to trust. Before this, the first plausible download
+  that grafted into a file with thousands of decode errors ended the search — with an honest
+  "not usable", but with no attempt at candidate two, which was often the right one.
+- **The program never borrows its own output as a reference.** A `.repaired.mp4` left beside the
+  damaged file is this tool's work, so it is skipped when looking for a twin.
+
 ## 0.7.0
 
 A damaged file usually has an intact twin somewhere: the same upload on a file host, on the site it

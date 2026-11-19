@@ -137,3 +137,41 @@ def test_an_html_download_is_never_a_candidate(tmp_path):
     page.write_bytes(b"<!DOCTYPE html><html><body>please sign in</body></html>")
     ok, why = source.plausible(page, identity, probe=lambda p: {"ok": True})
     assert ok is False and "not a media file" in why
+
+
+def test_a_download_that_does_not_decode_gives_way_to_the_next_candidate(tmp_path, monkeypatch):
+    """Passing the size sieve is not proof. A candidate that grafts into garbage must cost the
+    next candidate, not the whole repair."""
+    from types import SimpleNamespace
+
+    from mediarescue import cli
+    from mediarescue.report import Severity
+
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"\x00" * 4096)
+    out = tmp_path / "clip.repaired.mp4"
+    first = tmp_path / "candidate-1.mp4"
+    first.write_bytes(b"\x00" * 10)
+    second = tmp_path / "candidate-2.mp4"
+    second.write_bytes(b"\x00" * 10)
+
+    tried = []
+
+    def fake_repair(path, ref, out_path, args, strategy):
+        tried.append(ref.name)
+        if ref == first:
+            return {"ok": False, "output": str(out_path), "reason": "31865 decode errors"}
+        Path(out_path).write_bytes(b"\x00" * 16)
+        return {"ok": True, "output": str(out_path)}
+
+    monkeypatch.setattr(cli, "_repair_with_reference", fake_repair)
+    monkeypatch.setattr(cli, "_online_references", lambda path, args: iter([first, second]))
+    monkeypatch.setattr("mediarescue.reference.find_reference", lambda path, **kw: None)
+
+    args = SimpleNamespace(reference=None, find_source=True, strategy="auto", quiet=True,
+                           no_color=True, verbose=False, timescale=None, fps=30.0, no_verify=True)
+    result = cli._repair(src, out, args, SimpleNamespace(severity=Severity.MISSING_ATOMS))
+
+    assert result["ok"] is True
+    assert tried == ["candidate-1.mp4", "candidate-2.mp4"]
+    assert any("candidate-2.mp4" in note for note in result.get("notes", []))

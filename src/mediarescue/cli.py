@@ -178,11 +178,14 @@ def _repair_with_reference(src: Path, ref: Path, out: Path, args, strategy: str)
             "reason": r.reason}
 
 
-def _online_reference(src: Path, args) -> Path | None:
-    """Search the web for the original upload of `src` and download it as a reference.
+def _online_references(src: Path, args):
+    """Yield downloaded references for `src`, most promising first.
 
-    Only reached when there is no local reference and no healthy sibling. Results are cached per
-    run by title: a folder of files from one upload session should not hit the network N times.
+    Every path that comes out of here is plausible by name, size and shape, but that is not
+    proof: a file can pass every cheap test and still be a different encode. The caller grafts
+    with the path and verifies the result, so a wrong candidate costs the next one instead of
+    the whole repair. Cached per run by title: a folder of files from one upload session should
+    not hit the network N times.
     """
     import tempfile
 
@@ -210,9 +213,10 @@ def _online_reference(src: Path, args) -> Path | None:
         cached = cache[key]
         if cached is None:
             say(f"no original found earlier for \"{identity.title}\"")
-            return None
+            return
         # A cached download may already have been used; copies are cheap, downloads are not.
-        return cached
+        yield cached
+        return
 
     say(f"looking online for the original of {src.name}")
     detail(f"search title: \"{identity.title}\"")
@@ -220,7 +224,7 @@ def _online_reference(src: Path, args) -> Path | None:
     if not candidates:
         say("no candidate came back — the file was probably never hosted under that name")
         cache[key] = None
-        return None
+        return
 
     folder = Path(tempfile.mkdtemp(prefix="mediarescue-src-"))
     # fetch.download() puts its own folder inside this one, so cleanup(path) frees the inner one
@@ -241,8 +245,9 @@ def _online_reference(src: Path, args) -> Path | None:
     if not same_size:
         say("every result was a different file (nothing matching this one's size)")
         cache[key] = None
-        return None
+        return
 
+    seen = False
     for url in same_size[:tries]:
         detail(f"trying {url[:110]}")
         try:
@@ -255,14 +260,20 @@ def _online_reference(src: Path, args) -> Path | None:
             detail(f"  skipped: {why}")
             path.unlink(missing_ok=True)
             continue
+        seen = True
         say(f"  original found: {path.name} ({fetch.describe(path.stat().st_size)}) — {why}")
         setattr(args, "_online", str(path))
         getattr(args, "_fetched", []).append(path)
         cache[key] = path
-        return path
-    say(f"tried {min(tries, len(candidates))} candidate(s); none was the same file")
-    cache[key] = None
-    return None
+        yield path
+    if not seen:
+        say(f"tried {min(tries, len(candidates))} candidate(s); none was the same file")
+        cache[key] = None
+
+
+def _online_reference(src: Path, args) -> Path | None:
+    """The first plausible reference found online, or None."""
+    return next(_online_references(src, args), None)
 
 
 def _repair(src: Path, out: Path, args, d) -> dict:
@@ -308,9 +319,26 @@ def _repair(src: Path, out: Path, args, d) -> dict:
         # the index entirely and falling back to carve.
         from .reference import find_reference
         auto = find_reference(src)
+        result = None
         if auto is None and getattr(args, "find_source", False):
-            auto = _online_reference(src, args)
-        if auto is None:
+            # Each download is tried for real. A candidate can pass every cheap test (name, size,
+            # shape) and still graft into a file that does not decode -- that is a failed attempt,
+            # not the end of the search, so the next one is fetched and tried in its place.
+            refused: list[str] = []
+            for ref in _online_references(src, args):
+                attempt = _repair_with_reference(src, ref, out, args, strategy)
+                if attempt.get("ok"):
+                    attempt.setdefault("notes", []).append(f"original found online: {ref.name}")
+                    attempt["reference"] = str(ref)
+                    result = attempt
+                    break
+                refused.append(f"{ref.name} did not decode ({attempt.get('reason') or 'garbled'})")
+                out.unlink(missing_ok=True)
+            if result is None:
+                result = _carve_or_explain(src, out, args.fps,
+                                           "nothing found online fitted this file either")
+                result.setdefault("notes", []).extend(refused)
+        elif auto is None:
             result = _carve_or_explain(src, out, args.fps,
                                        "no --reference given and no matching sibling found")
         else:
