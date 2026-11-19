@@ -260,7 +260,7 @@ The twin of a damaged download often still lives in a free cloud drive. `--refer
 the run ends:
 
 ```bash
-mediarescue fix "D:/file-rusak/bad-block" --out-dir "D:/file-rusak/recovered" \
+mediarescue fix "D:/broken-file" --out-dir "D:/fixed" \
   --reference "https://terabox.com/s/1AbCdEfGhIjKl"
 ```
 
@@ -292,13 +292,14 @@ Most damaged downloads have an intact twin somewhere on the internet — the sam
 host or on the site it came from. Instead of hunting for it yourself:
 
 ```bash
-mediarescue source "D:/file-rusak/bad-block/clip.mp4"
+mediarescue source "D:/broken-file/clip.mp4"
 ```
 
 ![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png)
 
-That screenshot is the unedited output of a real run (a 30-second Big Buck Bunny clip whose `moov`
-box was cut off); only the window frame around it is drawn for the README.
+That screenshot is the output of a real run (a 30-second Big Buck Bunny clip whose `moov`
+box was cut off); the window frame around it is drawn for the README, and the shell prompt — user
+name, machine name and folder — is blanked. The lines the program prints are untouched.
 
 The command reads the filename, strips the download-site noise (`[1080p]`, `@channel`, `- SOMESITE`),
 searches the web for the original, downloads the best match into a temporary folder, repairs with
@@ -317,7 +318,7 @@ For a whole folder, add the flag to the normal batch command. Only the files tha
 trigger a search:
 
 ```bash
-mediarescue fix "D:/file-rusak/bad-block" --out-dir "D:/file-rusak/recovered" --find-source
+mediarescue fix "D:/broken-file" --out-dir "D:/fixed" --find-source
 ```
 
 What it will and will not do:

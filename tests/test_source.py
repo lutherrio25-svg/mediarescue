@@ -165,6 +165,7 @@ def test_a_download_that_does_not_decode_gives_way_to_the_next_candidate(tmp_pat
         return {"ok": True, "output": str(out_path)}
 
     monkeypatch.setattr(cli, "_repair_with_reference", fake_repair)
+    monkeypatch.setattr(cli, "_plays_without_errors", lambda path: len(tried) == 2)
     monkeypatch.setattr(cli, "_online_references", lambda path, args: iter([first, second]))
     monkeypatch.setattr("mediarescue.reference.find_reference", lambda path, **kw: None)
 
@@ -175,3 +176,11 @@ def test_a_download_that_does_not_decode_gives_way_to_the_next_candidate(tmp_pat
     assert result["ok"] is True
     assert tried == ["candidate-1.mp4", "candidate-2.mp4"]
     assert any("candidate-2.mp4" in note for note in result.get("notes", []))
+
+
+def test_a_junk_link_on_a_page_does_not_stop_the_search():
+    """Real pages carry broken hrefs like //[host; urlsplit refuses them outright."""
+    html = ('<a href="//[www.terabox.com/s/1abc">x</a> '
+            '<a href="https://www.terabox.com/s/1real">real</a>')
+    found = source.extract_media_links(html)
+    assert "https://www.terabox.com/s/1real" in found

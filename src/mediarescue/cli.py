@@ -178,6 +178,15 @@ def _repair_with_reference(src: Path, ref: Path, out: Path, args, strategy: str)
             "reason": r.reason}
 
 
+def _plays_without_errors(path: Path) -> bool:
+    """Decode the whole file to nowhere: the only proof a borrowed index really fits."""
+    from .ffmpeg import decode_check, probe
+    if not probe(path).get("ok"):
+        return False
+    clean, _lines, _first = decode_check(path)
+    return clean
+
+
 def _online_references(src: Path, args):
     """Yield downloaded references for `src`, most promising first.
 
@@ -327,12 +336,14 @@ def _repair(src: Path, out: Path, args, d) -> dict:
             refused: list[str] = []
             for ref in _online_references(src, args):
                 attempt = _repair_with_reference(src, ref, out, args, strategy)
-                if attempt.get("ok"):
+                if attempt.get("ok") and _plays_without_errors(Path(attempt["output"])):
                     attempt.setdefault("notes", []).append(f"original found online: {ref.name}")
                     attempt["reference"] = str(ref)
+                    attempt["verify"] = {"ok": True, "decode_errors": 0}
                     result = attempt
                     break
-                refused.append(f"{ref.name} did not decode ({attempt.get('reason') or 'garbled'})")
+                refused.append(f"{ref.name} did not play cleanly "
+                               f"({attempt.get('reason') or 'the graft decoded into noise'})")
                 out.unlink(missing_ok=True)
             if result is None:
                 result = _carve_or_explain(src, out, args.fps,
@@ -366,7 +377,7 @@ def _repair(src: Path, out: Path, args, d) -> dict:
 
     if result.get("ok"):
         result["probe"] = probe(Path(result["output"]))
-        if not args.no_verify:
+        if not args.no_verify and "verify" not in result:
             from .ffmpeg import decode_check
             clean, lines, first = decode_check(Path(result["output"]))
             result["verify"] = {"ok": clean, "decode_errors": lines}

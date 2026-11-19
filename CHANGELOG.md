@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.2
+
+- **A downloaded candidate that grafts into noise no longer counts as the answer.** 0.7.1 tried the
+  next candidate when the graft *failed*; a graft that produced a file full of decode errors still
+  ended the search, because "it made a file" was mistaken for "it made a playable file". Every
+  candidate is now decoded to the end before it is accepted or dropped.
+- **One broken link on a page no longer kills the search.** Pages carry junk hrefs such as
+  `//[www.terabox.com/...` that `urlsplit` refuses outright; the whole run used to die with
+  `ValueError: Invalid IPv6 URL`. Such a link is now skipped.
+- **The README shows a placeholder shell prompt** (`alex@laptop`, `~/Videos`) instead of paths from
+  the machine the screenshot was taken on, and the disclosure says so.
+
 ## 0.7.1
 
 Two gaps that made a repair give up while a usable reference was still within reach.

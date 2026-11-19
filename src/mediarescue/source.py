@@ -271,9 +271,17 @@ JUNK_RESULT = re.compile(r"\.(?:css|js|png|jpe?g|gif|svg|ico|woff2?|json|xml)(?:
 ENGINE_HOSTS = ("bing.com", "google.", "duckduckgo.com", "microsoft.com", "yahoo.com")
 
 
+def _host(url: str) -> str:
+    """Pages carry junk like `//[www.terabox.com` that urlsplit refuses outright; skip those."""
+    try:
+        return urllib.parse.urlsplit(url).netloc.lower()
+    except ValueError:
+        return ""
+
+
 def usable_result(url: str) -> bool:
     """Search engines return their own stylesheets and ad redirects; none of those is a source."""
-    host = urllib.parse.urlsplit(url).netloc.lower()
+    host = _host(url)
     if not host or any(host.endswith(h) or h in host for h in ENGINE_HOSTS):
         return False
     return not JUNK_RESULT.search(urllib.parse.urlsplit(url).path or url)
@@ -312,7 +320,9 @@ def extract_media_links(html: str, base: str = "") -> list[str]:
         found.append(_absolute(match.group(1), base))
     for match in SHARE_LINK.finditer(html):
         url = match.group(0).rstrip('",)')
-        host = urllib.parse.urlsplit(url).netloc.lower()
+        host = _host(url)
+        if not host:
+            continue
         if any(h in host for h in fetch.TERABOX_HOSTS) or any(
                 h in host for h in ("mediafire.com", "pixeldrain.com", "gofile.io",
                                     "drive.google.com", "dropbox.com", "1drv.ms")):
