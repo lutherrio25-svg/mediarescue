@@ -64,9 +64,11 @@ def cmd_scan(args) -> int:
                             "green" if d.recoverable else "red")
             print(f"{label} {d.size:>12,}  {fixable}  {f}")
     if args.json:
-        print(json.dumps([d.to_dict() for d in rows], indent=2))
+        # printable(): a lone surrogate survives as text but makes the JSON invalid.
+        print(ui.printable(json.dumps([d.to_dict() for d in rows], indent=2)))
     if args.out:
-        Path(args.out).write_text(json.dumps([d.to_dict() for d in rows], indent=2), encoding="utf-8")
+        Path(args.out).write_text(ui.printable(json.dumps([d.to_dict() for d in rows], indent=2)),
+                                  encoding="utf-8")
         print(f"\nwrote {args.out} ({len(rows)} files)", file=sys.stderr)
     if not args.json:
         bad = [d for d in rows if d.severity != Severity.HEALTHY]
@@ -377,6 +379,9 @@ def _fix_batch(targets: list[Path], args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # A filename can contain characters the console cannot encode (NTFS allows lone surrogates);
+    # without this a whole scan aborts mid-table with OSError EINVAL instead of finishing.
+    ui.forgiving_output()
     # Without this, `not argv` is true for every real invocation and the no-argument shortcut
     # swallows the command line: `mediarescue scan x` would open the menu instead of scanning.
     argv = list(sys.argv[1:] if argv is None else argv)

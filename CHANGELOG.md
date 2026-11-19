@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.1
+
+Found by pointing 0.5.0 at a real damaged folder and piping it into `head`, the way anyone reading
+a long listing would.
+
+- **Fixed:** `mediarescue scan big-folder | head` (or `| less`, or Ctrl+C in a pager) buried the
+  report under `OSError: [Errno 22] Invalid argument`. Windows reports a closed pipe as EINVAL, not
+  `BrokenPipeError`, and the write escaped as a traceback. Output now goes quiet and the command
+  exits 0.
+- **Fixed:** one filename the console cannot encode could abort the whole scan mid-table. NTFS
+  stores raw UTF-16 units, so a damaged directory entry can hold a lone surrogate; such a name is
+  now shown with `�` and the report still finishes. JSON output stays parseable too.
+- Both cases are handled in one place (`ui.ForgivingStream`), so `scan`, `fix`, `doctor` and the
+  menu all benefit, and a legacy code page degrades to backslash escapes instead of crashing.
+
 ## 0.5.0
 
 Everything here came from running the tool on real damaged files, one command at a time, and

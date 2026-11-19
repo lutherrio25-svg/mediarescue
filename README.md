@@ -37,6 +37,24 @@ Requires Python 3.10+ and `ffmpeg` + `ffprobe` on your `PATH`:
 Confirm with `ffmpeg -version` and `mediarescue --version`. If ffmpeg lives somewhere unusual,
 point at it with `MEDIARESCUE_FFMPEG` / `MEDIARESCUE_FFPROBE`.
 
+`pip: command not found` means Python itself is missing (on Windows the `python` in `WindowsApps`
+is only a Microsoft Store stub). Install it first, then reopen the terminal:
+
+| Platform | Command |
+|---|---|
+| Windows | `winget install -e --id Python.Python.3.12` |
+| macOS | `brew install python` |
+| Debian/Ubuntu | `sudo apt install python3 python3-pip python3-venv` |
+
+A virtual environment keeps the tool out of the system Python, and puts a `mediarescue` command in
+its `Scripts` (Windows) or `bin` (macOS/Linux) folder:
+
+```bash
+python -m venv ~/mediarescue-cli
+~/mediarescue-cli/Scripts/pip install "git+https://github.com/lutherrio25-svg/mediarescue.git"   # Windows
+~/mediarescue-cli/bin/pip    install "git+https://github.com/lutherrio25-svg/mediarescue.git"   # macOS/Linux
+```
+
 No Python on the machine? The published container already has ffmpeg inside:
 
 ```bash
