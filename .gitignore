@@ -9,3 +9,4 @@ dist/
 *.trimmed.*
 report.json
 .release-notes-*.md
+*.v1
