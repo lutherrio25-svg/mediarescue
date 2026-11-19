@@ -81,6 +81,27 @@ def test_every_choice_carries_a_plain_language_hint():
         assert menu_mod.HINTS[key] in s.text
 
 
+def test_the_menu_fits_an_80_column_terminal():
+    """The frame is as wide as its longest row: one long hint and the menu wraps on a stock
+    terminal, which is the shape the tool ships to."""
+    paint = ui.colour_for(False)
+    rows = menu_mod._header(paint) + menu_mod._plain_choices(1) + [menu_mod._footer(paint, True)]
+    widest = max(rows, key=len)
+    assert len(widest) <= 80, widest
+    help_lines = menu_mod.DAMAGE_HELP.split("\n")
+    assert max(len(line) for line in help_lines) <= 80, max(help_lines, key=len)
+
+
+def test_the_hint_column_does_not_shift_on_the_highlighted_row():
+    """The highlight is a background, not an indent: it used to push its own row two columns right,
+    so the whole menu looked ragged on the row the eye is drawn to."""
+    import re
+    paint = ui.colour_for(True)
+    rows = [re.sub(r"\033\[[0-9;]*m", "", row) for row in menu_mod._choice_lines(paint, 3)]
+    starts = {row.index(menu_mod.HINTS[key]) for row, (key, _) in zip(rows, CHOICES)}
+    assert len(starts) == 1, starts
+
+
 def test_the_frame_degrades_to_ascii_on_a_legacy_code_page(monkeypatch):
     """A cp437 console would raise UnicodeEncodeError on box drawing and kill the menu."""
     class Legacy:

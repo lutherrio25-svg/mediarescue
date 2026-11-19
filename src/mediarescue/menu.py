@@ -26,40 +26,43 @@ KeyReader = Callable[[], str]
 
 TAGLINE = "repair damaged video and audio files; originals are never touched"
 
+# Labels and hints are kept short on purpose: the frame is as wide as its longest row, and a menu
+# that wraps in an 80-column terminal is a menu that looks broken on the machine it ships to.
 CHOICES: list[tuple[str, str]] = [
     ("1", "Check this machine can repair files"),
     ("2", "Look at a file or folder"),
     ("3", "Repair one file"),
     ("4", "Repair every damaged file in a folder"),
-    ("5", "Show the damage classes and what each repair does"),
-    ("6", "Find a file's original online and repair it"),
+    ("5", "Show the damage classes"),
+    ("6", "Find a file's original online"),
     ("0", "Quit"),
 ]
 
 HINTS = {
-    "1": "verifies ffmpeg, ffprobe, disk space",
-    "2": "says what is wrong; changes nothing",
-    "3": "writes a new file, original untouched",
-    "4": "skips the healthy ones, repairs the rest",
-    "5": "one line per class, plus the repair it triggers",
-    "6": "searches the web for the original upload, then repairs",
+    "1": "ffmpeg, ffprobe, disk space",
+    "2": "what's wrong, no changes",
+    "3": "leaves the original alone",
+    "4": "skips the healthy ones",
+    "5": "one line per class",
+    "6": "searches the web first",
     "0": "close the menu",
 }
 
 DAMAGE_HELP = """\
-Damage classes and the repair each one triggers
+Damage classes, and the repair each one triggers
 
-  healthy          boxes parse, index reachable        remux (optional cleanup)
-  corrupt-payload  index fine, pictures are junk       salvage (cut to the first clean keyframe)
-  corrupt-index    AVI idx1 missing or misdirected     remux with +ignidx (rescan movi)
-  missing-trailer  mdat runs past EOF, moov is inside  salvage (trim, then cut a junk head)
-  fragmented       starts at moof, init segment lost   flatten (or carve without a reference)
-  missing-atoms    ftyp+mdat present, moov gone        graft (or carve without a reference)
-  headerless       nothing parsable at offset 0        not repairable
-  empty            0 bytes                             nothing to rebuild
+  healthy           index reachable, boxes ok     remux, optional
+  corrupt-payload   index fine, pictures junk     salvage from keyframe
+  corrupt-index     AVI idx1 wrong or missing     remux with +ignidx
+  missing-trailer   mdat past EOF, moov inside    salvage, then trim
+  fragmented        starts at moof, init lost     flatten or carve
+  missing-atoms     ftyp+mdat there, moov gone    graft or carve
+  headerless        nothing parses at offset 0    not repairable
+  empty             0 bytes                       nothing to rebuild
 
-Fragmented AV1 files whose audio configuration died with the index need --reference: any intact
-MP4 encoded the same way will do, it does not have to be AV1."""
+Fragmented AV1 files whose audio configuration died with the index need
+--reference: any intact MP4 encoded the same way will do, it does not have
+to be AV1."""
 
 
 # --- glyphs -----------------------------------------------------------------------------------
@@ -90,14 +93,23 @@ def _text(unicode_form: str, ascii_form: str) -> str:
     return unicode_form if _can_print(unicode_form) else ascii_form
 
 
+def _label_width() -> int:
+    return max(len(label) for _, label in CHOICES)
+
+
+def _row(key: str, label: str, marker: str, paint=None) -> str:
+    """One menu row: marker slot, number, label, hint. Every row is built here, coloured or not,
+    so the hint column cannot drift by a space between the highlighted row and the rest."""
+    number, hint = f"{key:>2}", HINTS.get(key, "")
+    if paint is not None:
+        number, hint = paint(number, "yellow"), paint(hint, "dim")
+    return f"  {marker}{number}  {label.ljust(_label_width())}  {hint}"
+
+
 def _plain_choices(selected: int | None) -> list[str]:
     g = _glyphs()
-    label_width = max(len(label) for _, label in CHOICES)
-    out = []
-    for index, (key, label) in enumerate(CHOICES):
-        marker = f"{g['sel']} " if selected == index else ("  " if selected is None else "  ")
-        out.append(f"{marker}{key:>2}  {label.ljust(label_width)}  {HINTS.get(key, '')}")
-    return out
+    return [_row(key, label, f"{g['sel']} " if selected == index else "  ")
+            for index, (key, label) in enumerate(CHOICES)]
 
 
 def _content_width() -> int:
@@ -133,19 +145,18 @@ def _choice_lines(paint, selected: int | None, width: int | None = None) -> list
     around coloured spans would not work, because the first inner reset ends the highlight.
     """
     width = _content_width() if width is None else width
-    label_width = max(len(label) for _, label in CHOICES)
     plain_lines = _plain_choices(selected)
     out = []
     for index, (key, label) in enumerate(CHOICES):
         plain = plain_lines[index]
         pad = " " * max(0, width - len(plain))
         if selected == index:
-            # padded to the frame's outer width so the bar lines up with the box above it
-            out.append(paint("  " + plain + pad + "  ", "reverse"))
+            # one reverse span over uncoloured text: the bar reaches the frame's edge, and an inner
+            # reset from a coloured span cannot end the highlight halfway along the row
+            # the bar spans the frame's outer width, borders included, so it reads as one row
+            out.append(paint(plain + " " * max(0, width + 4 - len(plain)), "reverse"))
             continue
-        hint = HINTS.get(key, "")
-        number = paint(f"{key:>2}", "yellow")
-        out.append(f"  {number}  {label.ljust(label_width)}  " + paint(hint, "dim") + pad)
+        out.append(_row(key, label, "  ", paint) + pad)
     return out
 
 

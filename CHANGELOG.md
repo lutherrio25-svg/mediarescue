@@ -15,6 +15,10 @@ Small things that made the tool feel unfinished, plus two rules that were quietl
   inside the one code path it was meant to protect.
 - **`python -m mediarescue` runs the tool**, `--version` prints `mediarescue 0.8.0` instead of a bare
   number, and `--help` ends with the two commands a beginner needs first.
+- **The menu fits an 80-column terminal, and its rows line up.** The frame was as wide as its
+  longest hint — 111 columns — so a stock terminal wrapped it; the highlighted row also pushed its
+  own text two columns right, which made the one row you look at the ragged one. Both are now
+  covered by tests that measure the frame's width and the hint column.
 - A second download of the same name prints `another candidate:` instead of a second
   `original found:`, and the unused imports the linter kept finding are gone.
 

@@ -104,19 +104,18 @@ No flags to remember: run `mediarescue` with no arguments in a terminal and you 
 ![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png)
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│ mediarescue 0.5.0                                                      │
-│ repair damaged video and audio files; originals are never touched      │
-└────────────────────────────────────────────────────────────────────────┘
-
-     1  Check this machine can repair files    verifies ffmpeg, ffprobe, disk space
-     2  Look at a file or folder               says what is wrong; changes nothing
-  ▶  3  Repair one file                        writes a new file, original untouched
-     4  Repair every damaged file in a folder  skips the healthy ones, repairs the rest
-     5  Show the damage classes and what each repair does
+┌────────────────────────────────────────────────────────────────────────────┐
+│ mediarescue 0.8.0                                                          │
+│ repair damaged video and audio files; originals are never touched          │
+└────────────────────────────────────────────────────────────────────────────┘
+     1  Check this machine can repair files    ffmpeg, ffprobe, disk space
+     2  Look at a file or folder               what's wrong, no changes
+  ▸  3  Repair one file                        leaves the original alone
+     4  Repair every damaged file in a folder  skips the healthy ones
+     5  Show the damage classes                one line per class
+     6  Find a file's original online          searches the web first
      0  Quit                                   close the menu
-
-  ↑/↓ move · Enter choose · 0 quits
+  ↑/↓ move  ·  Enter choose  ·  0 quits
 ```
 
 Use the arrow keys and press Enter, or just type the number and press Enter — whichever you
