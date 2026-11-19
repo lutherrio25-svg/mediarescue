@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.7.0
+
+A damaged file usually has an intact twin somewhere: the same upload on a file host, on the site it
+was downloaded from, or on a mirror. `mediarescue` can now go and find it.
+
+- **New command:** `mediarescue source "damaged.mp4"` searches the web for the original of that
+  file, downloads the best match, repairs with it, and verifies the result with a full decode.
+- **New flag:** `fix --find-source` does the same for a whole folder — files that need a reference
+  get one looked up, files that do not are untouched.
+- **How the title is chosen:** the filename is stripped of download-site noise (`[1080p]`,
+  `@channel`, `- SITENAME`, `_4K`) and the rest becomes the query.
+- **Search backends, in order:** the Tavily HTTP API when `TAVILY_API_KEY` is set, the `tvly` CLI
+  when it is installed and signed in, then DuckDuckGo (HTML and lite), then Bing. Results that are
+  search-engine furniture (stylesheets, ad redirects, the engine's own pages) are dropped.
+- **Cheap rejection before download:** every candidate's size is checked with a HEAD request and
+  must fall within ±25–35% of the damaged file's size. This is what stops a 41 MB ten-minute copy
+  from being grafted onto a 30 second recording — the decode check would notice, but only after
+  paying for the download and producing a file full of noise.
+- **Candidate ranking:** URLs whose filename contains the title (compared with spaces and
+  punctuation squashed) win; `github.com/.../blob/...` links are rewritten to
+  `raw.githubusercontent.com` because the former serves a page, not the video.
+- Downloads go to a temporary folder and are **deleted when the run ends** — nothing is kept
+  except the repaired file. `--max-tries` (default 8) caps how many downloads a search may cost.
+- Menu choice `6`: "Find a file's original online and repair it".
+
+Verified against the real internet: a 30 second Big Buck Bunny clip with its index removed was
+repaired by a downloaded twin — `graft → .repaired.mp4  30.04s  h264+aac  decodes cleanly`.
+
+Honest limit: a search finds *files with the same name*, not *the same encoding*. A re-uploaded or
+re-encoded copy cannot serve as a reference (different encoder settings mean its index does not
+describe your payload), and the verification step is what catches that.
+
 ## 0.6.0
 
 The intact twin of a damaged download almost never sits on the same disk — it sits in a free cloud

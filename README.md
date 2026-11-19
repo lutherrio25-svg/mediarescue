@@ -11,7 +11,9 @@ wrong with a file, repairs it into a **new** file, and reports exactly what it h
 **Originals are never modified.** Nothing is overwritten, nothing is deleted.
 
 Built for the failures that actually show up on a real disk: interrupted copies, zero-filled
-heads, fragmented MP4s that lost their init segment, downloads that never finished.
+heads, fragmented MP4s that lost their init segment, downloads that never finished. When the index
+is gone and no intact copy exists anywhere, it can search the web for the original upload and
+repair with that.
 
 ![mediarescue in a terminal: scan a folder, then repair an AVI index, a damaged MP3 and a cut-off AVI](docs/terminal.png)
 
@@ -226,6 +228,7 @@ Nothing printed means the frames really decode. Then open the file and look at i
 | Video plays, audio clicks or drops out | run the decode check first; audio payload that is gone cannot be invented |
 | File is 0 bytes | nothing to recover — re-download or restore a backup |
 | Everything already looks fine | `mediarescue fix good.mp4 -o copy.mp4` rewrites the container cleanly |
+| Damaged file, and you have no intact copy anywhere | `mediarescue source bad.mp4` searches the web for the original and repairs with it |
 
 ## The one thing that trips everyone up: `--reference`
 
@@ -282,6 +285,54 @@ Notes that save a support round-trip:
 - A share link that returns a sign-in page instead of a file is reported as exactly that, never
   saved as a fake reference.
 - Downloads are capped at 4 GB: anything larger is not a reference, it is a mistake.
+
+## When you have no twin at all: let it search
+
+Most damaged downloads have an intact twin somewhere on the internet — the same upload on a file
+host or on the site it came from. Instead of hunting for it yourself:
+
+```bash
+mediarescue source "D:/file-rusak/bad-block/clip.mp4"
+```
+
+![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png)
+
+That screenshot is the unedited output of a real run (a 30-second Big Buck Bunny clip whose `moov`
+box was cut off); only the window frame around it is drawn for the README.
+
+The command reads the filename, strips the download-site noise (`[1080p]`, `@channel`, `- SOMESITE`),
+searches the web for the original, downloads the best match into a temporary folder, repairs with
+it, verifies with a full decode, and deletes the download. The repaired file lands next to the
+original with `.repaired` in the name.
+
+```text
+diagnosis: missing-atoms — no reachable moov anywhere: sample table lost
+working: graft → clip.repaired.mp4
+looking online for the original of clip.mp4
+  original found: candidate.mp4 (9.4 MB) — matches size/shape of the damaged file
+graft → clip.repaired.mp4  30.04s  h264+aac  decodes cleanly  source untouched
+```
+
+For a whole folder, add the flag to the normal batch command. Only the files that need a reference
+trigger a search:
+
+```bash
+mediarescue fix "D:/file-rusak/bad-block" --out-dir "D:/file-rusak/recovered" --find-source
+```
+
+What it will and will not do:
+
+- **It will not guess.** A candidate's size is checked before it is downloaded; a 41 MB copy of a
+  ten-minute video is never grafted onto a 30 second clip. If nothing matches, you get
+  "every result was a different file" instead of a file full of noise.
+- **The same encoding matters, not the same video.** A re-uploaded or re-encoded copy has different
+  encoder settings, so its index does not describe your payload. The decode check rejects it — try
+  the site you originally downloaded from.
+- **Nothing is kept but the repair.** Search results are not saved, downloads are deleted.
+- Search backends, in order: the Tavily API when `TAVILY_API_KEY` is set, the `tvly` command when
+  it is installed and signed in, DuckDuckGo, then Bing. No key is required.
+- `--max-tries N` caps how many downloads one search may cost (default 8); `--verbose` shows every
+  candidate and why it was skipped.
 
 ## When it cannot be fixed
 

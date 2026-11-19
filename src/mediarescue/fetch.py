@@ -341,6 +341,17 @@ def resolve(url: str) -> Resolved:
 
 # --------------------------------------------------------------------------- download
 
+def probe_size(url: str, headers: dict[str, str] | None = None) -> int:
+    """Bytes the link claims to be, or 0 when the server will not say. A HEAD costs nothing."""
+    try:
+        request = urllib.request.Request(url, headers=_headers(headers), method="HEAD")
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            value = response.headers.get("Content-Length") or ""
+            return int(value) if value.isdigit() else 0
+    except (urllib.error.URLError, OSError, ValueError):
+        return 0
+
+
 def _download_one(source: Source, target: Path, report=None) -> int:
     try:
         with _open(source.url, source.headers) as response:

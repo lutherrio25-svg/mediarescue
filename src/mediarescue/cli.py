@@ -167,6 +167,104 @@ def _carve_or_explain(src: Path, out: Path, fps: float, why: str) -> dict:
     return result
 
 
+def _repair_with_reference(src: Path, ref: Path, out: Path, args, strategy: str) -> dict:
+    """The two strategies that borrow an index, in one place so callers cannot drift apart."""
+    if strategy == "flatten":
+        from .fragmented import flatten
+        return flatten(src, ref, out, force_timescale=args.timescale)
+    from .graft import graft
+    r = graft(src, ref, out)
+    return {"ok": r.ok, "output": r.output, "tracks": r.tracks, "samples": r.samples,
+            "reason": r.reason}
+
+
+def _online_reference(src: Path, args) -> Path | None:
+    """Search the web for the original upload of `src` and download it as a reference.
+
+    Only reached when there is no local reference and no healthy sibling. Results are cached per
+    run by title: a folder of files from one upload session should not hit the network N times.
+    """
+    import tempfile
+
+    from . import source
+
+    cache = getattr(args, "_source_cache", None)
+    if cache is None:
+        cache = {}
+        setattr(args, "_source_cache", cache)
+    quiet = getattr(args, "quiet", False)
+    paint = ui.colour_for(ui.enabled(override=False if getattr(args, "no_color", False) else None))
+
+    def say(message: str) -> None:
+        if not quiet:
+            print(paint(message, "dim"), file=sys.stderr)
+
+    def detail(message: str) -> None:
+        """Per-candidate noise: only for someone who asked to see it."""
+        if not quiet and getattr(args, "verbose", False):
+            print(paint(message, "dim"), file=sys.stderr)
+
+    identity = source.identify(src, probe=probe)
+    key = identity.title.lower()
+    if key in cache:
+        cached = cache[key]
+        if cached is None:
+            say(f"no original found earlier for \"{identity.title}\"")
+            return None
+        # A cached download may already have been used; copies are cheap, downloads are not.
+        return cached
+
+    say(f"looking online for the original of {src.name}")
+    detail(f"search title: \"{identity.title}\"")
+    candidates = source.harvest(identity, report=say if getattr(args, "verbose", False) else None)
+    if not candidates:
+        say("no candidate came back — the file was probably never hosted under that name")
+        cache[key] = None
+        return None
+
+    folder = Path(tempfile.mkdtemp(prefix="mediarescue-src-"))
+    # fetch.download() puts its own folder inside this one, so cleanup(path) frees the inner one
+    # and this root would be left behind empty; the run removes it through `_trash`.
+    if not isinstance(getattr(args, "_trash", None), list):
+        args._trash = []
+    args._trash.append(folder)
+    tries = max(1, int(getattr(args, "max_tries", 8) or 8))
+    # Ask for the size before downloading: a HEAD is nearly free, so the whole candidate list can
+    # be sieved and only the ones that could be the same upload cost bandwidth.
+    same_size = []
+    for url in candidates:
+        claimed = fetch.probe_size(url)
+        if claimed and identity.size and not 0.75 <= claimed / identity.size <= 1.35:
+            detail(f"  skipped: {url[:80]} is {fetch.describe(claimed)}, not the same upload")
+            continue
+        same_size.append(url)
+    if not same_size:
+        say("every result was a different file (nothing matching this one's size)")
+        cache[key] = None
+        return None
+
+    for url in same_size[:tries]:
+        detail(f"trying {url[:110]}")
+        try:
+            path = fetch.download(url, folder, name_hint="candidate")
+        except fetch.FetchError as exc:
+            detail(f"  skipped: {exc}")
+            continue
+        ok, why = source.plausible(path, identity, probe=probe)
+        if not ok:
+            detail(f"  skipped: {why}")
+            path.unlink(missing_ok=True)
+            continue
+        say(f"  original found: {path.name} ({fetch.describe(path.stat().st_size)}) — {why}")
+        setattr(args, "_online", str(path))
+        getattr(args, "_fetched", []).append(path)
+        cache[key] = path
+        return path
+    say(f"tried {min(tries, len(candidates))} candidate(s); none was the same file")
+    cache[key] = None
+    return None
+
+
 def _repair(src: Path, out: Path, args, d) -> dict:
     """Run one strategy and verify the result. Prints nothing; returns the result dict."""
     strategy, mp3val = _resolve_strategy(src, d, args)
@@ -210,34 +308,28 @@ def _repair(src: Path, out: Path, args, d) -> dict:
         # the index entirely and falling back to carve.
         from .reference import find_reference
         auto = find_reference(src)
+        if auto is None and getattr(args, "find_source", False):
+            auto = _online_reference(src, args)
         if auto is None:
             result = _carve_or_explain(src, out, args.fps,
                                        "no --reference given and no matching sibling found")
-        elif strategy == "flatten":
-            from .fragmented import flatten
-            result = flatten(src, auto, out, force_timescale=args.timescale)
-            result.setdefault("notes", []).append(f"reference picked automatically: {auto.name}")
+        else:
+            result = _repair_with_reference(src, auto, out, args, strategy)
+            auto_note = ("original found online" if getattr(args, "_online", None) == str(auto)
+                         else "reference picked automatically")
+            result.setdefault("notes", []).append(f"{auto_note}: {auto.name}")
+            result["reference"] = str(auto)
+    elif not args.reference:
+        auto = _online_reference(src, args) if getattr(args, "find_source", False) else None
+        if auto is not None:
+            result = _repair_with_reference(src, auto, out, args, strategy)
+            result.setdefault("notes", []).append(f"original found online: {auto.name}")
             result["reference"] = str(auto)
         else:
-            from .graft import graft
-            r = graft(src, auto, out)
-            result = {"ok": r.ok, "output": r.output, "tracks": r.tracks,
-                      "samples": r.samples, "reason": r.reason,
-                      "reference": str(auto),
-                      "notes": [f"reference picked automatically: {auto.name}"]}
-    elif not args.reference:
-        # Index gone and no reference: rebuild from the payload itself (video only).
-        result = _carve_or_explain(src, out, args.fps, "no --reference given")
+            # Index gone and no reference: rebuild from the payload itself (video only).
+            result = _carve_or_explain(src, out, args.fps, "no --reference given")
     else:
-        ref = Path(args.reference)
-        if strategy == "flatten":
-            from .fragmented import flatten
-            result = flatten(src, ref, out, force_timescale=args.timescale)
-        else:
-            from .graft import graft
-            r = graft(src, ref, out)
-            result = {"ok": r.ok, "output": r.output, "tracks": r.tracks,
-                      "samples": r.samples, "reason": r.reason}
+        result = _repair_with_reference(src, Path(args.reference), out, args, strategy)
     result.setdefault("strategy", strategy)
     if mp3_damaged and mp3val is None:
         result.setdefault("notes", []).append(
@@ -262,6 +354,18 @@ def _result_ok(result: dict) -> bool:
         and result.get("verify", {}).get("ok", True)
 
 
+def cmd_source(args) -> int:
+    """`mediarescue source file.mp4` — search the web for the original, then repair with it."""
+    fix_args = argparse.Namespace(**vars(args))
+    fix_args.file = [args.file]
+    fix_args.find_source = True
+    fix_args.out_dir = None
+    fix_args.reference = None
+    fix_args.no_color = getattr(args, "no_color", False)
+    fix_args.brief = True if not getattr(args, "json", False) else False
+    return cmd_fix(fix_args)
+
+
 def cmd_fix(args) -> int:
     targets = [Path(p) for p in args.file]
     missing = [t for t in targets if not t.exists()]
@@ -273,6 +377,8 @@ def cmd_fix(args) -> int:
     # the batch, and deleted afterwards -- the user keeps nothing they did not already have.
     fetched = None
     reference = (getattr(args, "reference", None) or "").strip()
+    if not hasattr(args, "_fetched") or args._fetched is None:
+        args._fetched = []   # references found online by --find-source, deleted when the run ends
     if reference and fetch.is_url(reference):
         try:
             fetched = _fetch_reference(reference, args)
@@ -287,8 +393,15 @@ def cmd_fix(args) -> int:
             return _fix_single(targets[0], args)
         return _fix_batch(targets, args)
     finally:
+        # Online references are the user's only for the length of this run: delete the downloads
+        # (each fetch.cleanup removes its temporary folder).
+        import shutil
+        for extra in getattr(args, "_fetched", []) or []:
+            fetch.cleanup(extra)
         if fetched is not None:
             fetch.cleanup(fetched)
+        for folder in getattr(args, "_trash", []) or []:
+            shutil.rmtree(folder, ignore_errors=True)
 
 
 def _fetch_reference(url: str, args) -> Path | None:
@@ -365,15 +478,21 @@ def _brief_line(result: dict) -> str:
             return f"{result.get('strategy', '?')}: failed — {reason}"
         lines = (result.get("log") or "").strip().splitlines()
         return f"{result.get('strategy', '?')}: failed — {lines[-1][-200:] if lines else 'no detail'}"
-    probe = result.get("probe") or {}
+    probe_info = result.get("probe") or {}
     verify = result.get("verify") or {}
-    parts = [f"{result.get('strategy', '?')} → {Path(result['output']).name}", "ok"]
-    if probe.get("duration"):
-        parts.append(f"{probe['duration']:.2f}s")
-    if probe.get("streams"):
-        parts.append("+".join(probe["streams"]))
+    parts = [f"{result.get('strategy', '?')} → {Path(result['output']).name}"]
+    if probe_info.get("duration"):
+        parts.append(f"{probe_info['duration']:.2f}s")
+    if probe_info.get("streams"):
+        parts.append("+".join(probe_info["streams"]))
     if "decode_errors" in verify:
-        parts.append(f"decode errors {verify['decode_errors']}")
+        if verify.get("ok"):
+            parts.append("decodes cleanly")
+        else:
+            # A file that grafts but does not decode is not a repair; say so in the same breath.
+            parts.append(f"decode errors {verify['decode_errors']} — not usable")
+    else:
+        parts.append("unverified")
     parts.append("source untouched")
     return "  ".join(parts)
 
@@ -467,6 +586,8 @@ def _fix_batch(targets: list[Path], args) -> int:
                     "deleted:", "yellow"))
         print(paint('  mediarescue fix "<folder>" --out-dir "<out>" --reference "https://..."',
                     "yellow"))
+        print(paint("or let the tool look for the original itself (needs internet):", "yellow"))
+        print(paint('  mediarescue fix "<folder>" --out-dir "<out>" --find-source', "yellow"))
     return 1 if left else 0
 
 
@@ -532,7 +653,37 @@ def main(argv: list[str] | None = None) -> int:
                    default="auto",
                    help="salvage: trim, remux, then drop a head that was overwritten with junk; "
                         "carve: rebuild video from the raw H.264 payload without a reference")
+    f.add_argument("--find-source", action="store_true",
+                   help="when a file needs a reference and none was given, search the web for the "
+                        "original upload and use it (Tavily when TAVILY_API_KEY is set, else "
+                        "DuckDuckGo); downloads go to a temporary folder and are deleted")
+    f.add_argument("--max-tries", type=int, default=8,
+                   help="--find-source: how many candidate links to try before giving up "
+                        "(default 8)")
     f.set_defaults(func=cmd_fix)
+
+    so = sub.add_parser("source",
+                        help="find the original of a damaged file online, then repair it with it")
+    so.add_argument("file", help="the damaged media file")
+    so.add_argument("-o", "--out", help="output file (default: beside the input, .repaired)")
+    so.add_argument("--force", action="store_true",
+                    help="repair even if the file currently reads as healthy")
+    so.add_argument("--quiet", action="store_true", help="print only the result and the summary")
+    so.add_argument("--verbose", action="store_true", help="show every search and skip decision")
+    so.add_argument("--no-color", action="store_true", help="never emit ANSI colour")
+    so.add_argument("--json", action="store_true",
+                    help="full JSON report instead of the one-line summary")
+    so.add_argument("--max-tries", type=int, default=8,
+                    help="how many candidate links to try before giving up (default 8)")
+    so.add_argument("--deep", action="store_true", help="decode the input first")
+    so.add_argument("--no-verify", action="store_true", help="skip the decode check of the output")
+    so.add_argument("--fps", type=float, default=25.0,
+                    help="carve only: frame rate to assume when the index is lost (default 25)")
+    so.add_argument("--timescale", type=int,
+                    help="flatten only: force one timescale for all tracks, e.g. 90000")
+    so.add_argument("--strategy", choices=["auto", "graft", "flatten", "carve"], default="auto",
+                    help="what to do once the original is found (default: decide from the damage)")
+    so.set_defaults(func=cmd_source)
 
     m = sub.add_parser("menu", help="interactive all-in-one menu (also opens when run with no arguments)")
     m.set_defaults(func=cmd_menu)

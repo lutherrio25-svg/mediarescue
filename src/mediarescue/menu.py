@@ -32,6 +32,7 @@ CHOICES: list[tuple[str, str]] = [
     ("3", "Repair one file"),
     ("4", "Repair every damaged file in a folder"),
     ("5", "Show the damage classes and what each repair does"),
+    ("6", "Find a file's original online and repair it"),
     ("0", "Quit"),
 ]
 
@@ -41,6 +42,7 @@ HINTS = {
     "3": "writes a new file, original untouched",
     "4": "skips the healthy ones, repairs the rest",
     "5": "one line per class, plus the repair it triggers",
+    "6": "searches the web for the original upload, then repairs",
     "0": "close the menu",
 }
 
@@ -322,6 +324,16 @@ def run_menu(reader: Reader = input, writer: Writer = print,
             last = run(argv)
         elif choice == "5":
             writer(DAMAGE_HELP)
+        elif choice == "6":
+            path = _ask_path(reader, writer, "  damaged file> ")
+            if path is None:
+                continue
+            out = reader("  write the repair to (blank = next to the original)> ").strip().strip('"')
+            writer("  searching for the original upload of this file (needs internet)…")
+            argv = ["source", str(path)]
+            if out:
+                argv += ["-o", out]
+            last = run(argv)
         else:
             writer(f"  {choice!r} is not one of the numbers above")
             continue
