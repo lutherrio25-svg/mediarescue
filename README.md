@@ -75,7 +75,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.5.2 — doctor
+mediarescue 0.8.0 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -139,12 +139,12 @@ mediarescue scan "D:/broken-file"
 
 ```
 severity                bytes  fix  file
-corrupt-index         313,248  yes  C:\broken-file\clip.avi
-healthy                61,678  yes  C:\broken-file\holiday.mp4
-corrupt-index         266,260  yes  C:\broken-file\webcam.avi
+corrupt-index         313,248  yes  D:\broken-file\clip.avi
+healthy                61,678  yes  D:\broken-file\holiday.mp4
+corrupt-index         266,260  yes  D:\broken-file\webcam.avi
 
 3 scanned, 2 damaged, 2 repairable, 0 need a reference file
-next: mediarescue fix "C:\broken-file" --out-dir "C:\broken-file\recovered"
+next: mediarescue fix "D:\broken-file" --out-dir "D:\broken-file\recovered"
 ```
 
 Read it left to right: what is wrong, how big, whether it can be rebuilt (`fix` = yes/no, coloured
@@ -152,6 +152,9 @@ green or red in a terminal), and which file. The last line tells you the exact c
 with your own path already filled in. Add `--out report.json` to keep the full details.
 
 ![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png)
+
+`C:\media` in that screenshot is a placeholder folder, not a real machine; the paths are otherwise
+exactly what the tool printed.
 
 That reads headers only. Add `--deep` to decode every file as well — slower, but it is the only
 way to catch damage inside MP3/MKV/AVI, or a junk payload hiding behind a perfect index:
