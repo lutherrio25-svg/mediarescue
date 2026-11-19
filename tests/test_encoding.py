@@ -116,7 +116,7 @@ def unprintable_media(tmp_path):
         target.write_bytes(b"\x00" * 4096)
         if target.name != SURROGATE_NAME:  # pragma: no cover - filesystem mangled the name
             pytest.skip("this filesystem cannot store a surrogate name")
-    except OSError:  # pragma: no cover - e.g. a network share
+    except (OSError, UnicodeError):  # pragma: no cover - Linux refuses surrogates outright
         pytest.skip("this filesystem cannot store a surrogate name")
     return target
 
