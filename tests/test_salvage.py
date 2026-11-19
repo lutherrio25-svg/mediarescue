@@ -91,3 +91,26 @@ def test_salvage_drops_only_the_corrupt_head(tmp_path):
     assert decode_errors(out) == ""
     duration = probe(out)["duration"]
     assert 0.5 < duration < 4.1
+    assert not list(tmp_path.glob("*.stage.*"))      # working copies never outlive the run
+
+
+@needs_ffmpeg
+def test_salvage_failure_leaves_no_stage_file_behind(tmp_path, monkeypatch):
+    """A real batch left a 93 MB .stage file in the output folder after a failed remux; the next
+    scan then classified the tool's own working copy as a damaged file."""
+    import mediarescue.salvage as salvage_mod
+
+    clip = tmp_path / "bad.mp4"
+    make_clip(clip)
+    # Oversize the mdat box so trim_mdat writes its staging copy — the exact situation that
+    # leaked: trim succeeds, remux then fails, and the stage file must not survive.
+    data = bytearray(clip.read_bytes())
+    mdat = next(b for b in read_boxes(bytes(data)) if b.type == "mdat")
+    struct.pack_into(">I", data, mdat.offset, len(data) * 2)
+    clip.write_bytes(bytes(data))
+
+    monkeypatch.setattr(salvage_mod, "remux", lambda *a, **k: (False, ["boom"]))
+    result = salvage(clip, tmp_path / "salvaged.mp4")
+
+    assert not result["ok"]
+    assert not list(tmp_path.glob("*.stage.*"))

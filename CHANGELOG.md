@@ -13,6 +13,9 @@ that were all the same, solvable situation.
 - **Fixed:** `scan` and batch `fix` now skip this tool's own output files (`*.repaired.*`,
   `*.stage.*`), and a batch never re-processes files that live inside its `--out-dir`.
 - Menu choice `4` now asks for one intact file (blank = none) and passes it as `--reference`.
+- **Fixed:** `salvage` leaked its multi-hundred-megabyte `.stage.mp4` working copy into the output
+  folder whenever the run failed — a real batch on this developer's drive left a 93 MB one, which
+  the next scan then classified as a damaged file. Every exit path now cleans it up.
 
 ## 0.5.2
 
