@@ -11,7 +11,7 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
-from .mp4 import Box, find, iter_all, read_boxes
+from .mp4 import Box, iter_all, read_boxes
 
 
 @dataclass

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.0
+
+Small things that made the tool feel unfinished, plus two rules that were quietly not kept.
+
+- **The menu's arrow keys work.** `cmd_menu` called `run_menu()` without a key reader, so the
+  highlighted row, `↑/↓` and `Enter` never appeared on a real terminal: the reader existed and was
+  tested, but nothing handed it over. The bare `mediarescue` command now opens the live menu.
+- **`--out-dir` is honoured for a single file.** `mediarescue fix clip.avi --out-dir out` used to
+  ignore the folder and write `clip.repaired.avi` beside the source; `-o` names one file, and
+  `--out-dir` now means the same thing whether one file or fifty go through it.
+- **A malformed base64 blob can no longer crash the web fallback.** The Bing parser caught
+  `binascii.Error` without ever importing `binascii`, so the handler itself raised `NameError`
+  inside the one code path it was meant to protect.
+- **`python -m mediarescue` runs the tool**, `--version` prints `mediarescue 0.8.0` instead of a bare
+  number, and `--help` ends with the two commands a beginner needs first.
+- A second download of the same name prints `another candidate:` instead of a second
+  `original found:`, and the unused imports the linter kept finding are gone.
+
 ## 0.7.2
 
 - **A downloaded candidate that grafts into noise no longer counts as the answer.** 0.7.1 tried the

@@ -1,7 +1,5 @@
 """Reference-by-link: the share hosts, and what must happen when one lies to us."""
 import http.server
-import json
-import os
 import threading
 from pathlib import Path
 

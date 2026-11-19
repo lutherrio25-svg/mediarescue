@@ -1,5 +1,4 @@
 """Codec sniffing + av1C construction, checked against a real libaom/dav1d round trip."""
-import shutil
 import subprocess
 
 import pytest

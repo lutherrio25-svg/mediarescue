@@ -15,11 +15,12 @@ heads, fragmented MP4s that lost their init segment, downloads that never finish
 is gone and no intact copy exists anywhere, it can search the web for the original upload and
 repair with that.
 
-![mediarescue in a terminal: scan a folder, then repair an AVI index, a damaged MP3 and a cut-off AVI](docs/terminal.png)
+![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png)
 
-The screenshot is a real session: `scan` on a folder holding one healthy MP4, one AVI whose
-`idx1` points at the wrong chunks, one AVI whose index was cut off, and an MP3 damaged mid-file.
-Each repair below it is the CLI's own output, unedited.
+The screenshot is a real session: `scan` on a folder holding one healthy MP4, one healthy MP3, one
+AVI whose `idx1` points at the wrong chunks, and one AVI whose index was cut off. Every line below a
+prompt is the CLI's own output, unedited; the window frame is drawn for the README and the prompt is
+a placeholder (`PS C:\media>` is not a real machine).
 
 ## Install
 
@@ -191,6 +192,10 @@ The JSON also carries `verify`: the repaired file is decoded and `decode_errors`
 repair that writes a file but leaves broken payload exits with `1`, because a playable container
 full of silence is not a fix. Add `--deep` to decode the *input* first (same check as
 `scan --deep`), or `--no-verify` to skip the check on the output.
+
+`-o` names the exact output file. `--out-dir` does the same thing for one file as for a folder: it
+collects the repaired file into that folder under `<name>.repaired.<ext>`, so a batch of one and a
+batch of fifty land in the same place.
 
 **Repairing a whole folder** works the same way — point `fix` at it. Damaged files are repaired,
 healthy ones are left untouched, and the exit code is `1` if anything failed:

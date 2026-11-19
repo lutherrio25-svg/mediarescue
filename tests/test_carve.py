@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from mediarescue.carve import carve, extract_annexb, find_stream_start
+from mediarescue.carve import carve
 from mediarescue.cli import main
 from mediarescue.ffmpeg import have_ffmpeg, probe
 from mediarescue.report import Severity

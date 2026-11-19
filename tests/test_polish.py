@@ -1,5 +1,6 @@
 """What the polish changed: a framed menu, arrow keys, honest answers, and no wasted rewrites."""
 import subprocess
+import sys
 
 import pytest
 
@@ -198,3 +199,85 @@ def test_force_still_rewrites_a_healthy_file(tmp_path, capsys):
     out = tmp_path / "out.mp4"
     assert main(["fix", str(src), "-o", str(out), "--force", "--no-color"]) == 0
     assert out.exists()
+
+
+# --- the menu the user actually gets -----------------------------------------------------------
+
+def test_the_menu_gets_a_live_key_reader(monkeypatch):
+    """`run_menu()` with no reader can only be driven by typing a number; the arrow keys live
+    behind make_key_reader(), so cmd_menu has to pass it."""
+    seen = {}
+    monkeypatch.setattr(menu_mod, "make_key_reader", lambda: "READER")
+    monkeypatch.setattr(menu_mod, "run_menu", lambda **kw: seen.update(kw) or 0)
+
+    from mediarescue import cli
+
+    assert cli.cmd_menu(None) == 0
+    assert seen["keys"] == "READER"
+
+
+def test_no_key_reader_off_a_terminal():
+    """Under pytest stdin is not a tty, so the reader must bow out instead of blocking."""
+    from mediarescue.menu import make_key_reader
+
+    assert make_key_reader() is None
+
+
+def test_the_bare_command_line_opens_the_menu(monkeypatch):
+    """`mediarescue` with nothing after it is a terminal user who has not read the README."""
+    class Tty:
+        def isatty(self):
+            return True
+
+        def write(self, text):
+            return len(text)
+
+        def flush(self):
+            pass
+
+    seen = {}
+    monkeypatch.setattr(sys, "stdin", Tty())
+    monkeypatch.setattr(sys, "stdout", Tty())
+    monkeypatch.setattr(menu_mod, "make_key_reader", lambda: "READER")
+    monkeypatch.setattr(menu_mod, "run_menu", lambda **kw: seen.update(kw) or 0)
+
+    assert main([]) == 0
+    assert seen["keys"] == "READER"
+
+
+def test_a_script_gets_help_instead_of_a_menu(capsys):
+    """Nothing may block on input when there is no terminal on either end."""
+    assert main([]) == 2
+    assert "usage: mediarescue" in capsys.readouterr().out
+
+
+# --- small things people type ----------------------------------------------------------------
+
+def test_python_dash_m_reaches_the_same_tool():
+    out = subprocess.run([sys.executable, "-m", "mediarescue", "--version"],
+                         capture_output=True, text=True)
+    assert out.returncode == 0
+    assert out.stdout.startswith("mediarescue ")
+
+
+def test_version_says_what_it_is(capsys):
+    with pytest.raises(SystemExit) as stop:
+        main(["--version"])
+    assert stop.value.code == 0
+    assert capsys.readouterr().out.startswith("mediarescue ")
+
+
+# --- --out-dir means the same thing for one file ----------------------------------------------
+
+@needs_ffmpeg
+def test_out_dir_is_honoured_for_a_single_file(tmp_path, capsys):
+    """`fix file.avi --out-dir out` used to write beside the source and leave `out` empty."""
+    from tests.test_avi import make_avi, shift_entries
+
+    src = tmp_path / "clip.avi"
+    make_avi(src)
+    shift_entries(src)          # a real repair, so the healthy short-circuit cannot mask it
+    out = tmp_path / "collected"
+    assert main(["fix", str(src), "--out-dir", str(out), "--no-color"]) == 0
+    assert (out / "clip.repaired.avi").exists()
+    assert not (tmp_path / "clip.repaired.avi").exists()

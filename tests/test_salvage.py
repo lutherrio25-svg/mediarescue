@@ -16,8 +16,8 @@ needs_ffmpeg = pytest.mark.skipif(not have_ffmpeg(), reason="ffmpeg/ffprobe not 
 def make_clip(path, seconds=4):
     subprocess.run([
         "ffmpeg", "-v", "error", "-y",
-        "-f", "lavfi", "-i", f"testsrc=size=320x240:rate=25",
-        "-f", "lavfi", "-i", f"sine=frequency=440:sample_rate=44100",
+        "-f", "lavfi", "-i", "testsrc=size=320x240:rate=25",
+        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
         "-t", str(seconds), "-c:v", "libx264", "-g", "25", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "64k", str(path),
     ], check=True, capture_output=True)

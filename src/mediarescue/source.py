@@ -18,6 +18,7 @@ and never claims success without a clean decode.
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import os
 import re
@@ -150,7 +151,7 @@ def parse_bing(html: str) -> list[str]:
             value += "=" * (-len(value) % 4)
             try:
                 target = base64.urlsafe_b64decode(value).decode("utf-8", "replace")
-            except (ValueError, binascii.Error):  # type: ignore[name-defined]
+            except (ValueError, binascii.Error):
                 target = ""
             if target.startswith("http"):
                 urls.append(target)

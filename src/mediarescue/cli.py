@@ -112,8 +112,10 @@ def cmd_doctor(args) -> int:
 
 
 def cmd_menu(args) -> int:
-    from .menu import run_menu
-    return run_menu()
+    from .menu import make_key_reader, run_menu
+    # Without a key reader the menu still works, but only by typing a number and Enter. On a real
+    # terminal this is what makes the arrow keys and the highlighted row live.
+    return run_menu(keys=make_key_reader())
 
 
 def _pick_strategy(severity: Severity, requested: str) -> str:
@@ -257,6 +259,7 @@ def _online_references(src: Path, args):
         return
 
     seen = False
+    found = 0
     for url in same_size[:tries]:
         detail(f"trying {url[:110]}")
         try:
@@ -270,7 +273,11 @@ def _online_references(src: Path, args):
             path.unlink(missing_ok=True)
             continue
         seen = True
-        say(f"  original found: {path.name} ({fetch.describe(path.stat().st_size)}) — {why}")
+        found += 1
+        # The first hit is the one people expect to be "the" original; a second line with the same
+        # wording reads like the tool found it twice.
+        label = "original found" if found == 1 else "another candidate"
+        say(f"  {label}: {path.name} ({fetch.describe(path.stat().st_size)}) — {why}")
         setattr(args, "_online", str(path))
         getattr(args, "_fetched", []).append(path)
         cache[key] = path
@@ -462,9 +469,9 @@ def _fetch_reference(url: str, args) -> Path | None:
         print(paint(f"reference link: {url}", "dim"), file=sys.stderr)
     try:
         path = fetch.download(url, folder, name_hint="reference", report=report)
-    except fetch.FetchError as exc:
+    except fetch.FetchError:
         if not quiet:
-            print("\r" + " " * 60 + "\r", end="")
+                print("\r" + " " * 60 + "\r", end="")
         fetch.cleanup(folder / "reference.mp4")
         raise
     except OSError as exc:
@@ -497,7 +504,16 @@ def _fix_single(src: Path, args) -> int:
         print("ffmpeg/ffprobe not found on PATH", file=sys.stderr)
         return 3
 
-    out = Path(args.out) if args.out else src.with_name(src.stem + ".repaired" + src.suffix)
+    # --out-dir is not batch-only in meaning; someone who typed it for one file meant it, and
+    # quietly writing beside the source instead is the kind of surprise that loses a file.
+    if args.out:
+        out = Path(args.out)
+    elif getattr(args, "out_dir", None):
+        folder = Path(args.out_dir)
+        folder.mkdir(parents=True, exist_ok=True)
+        out = folder / (src.stem + ".repaired" + src.suffix)
+    else:
+        out = src.with_name(src.stem + ".repaired" + src.suffix)
     if not getattr(args, "quiet", False):
         # A 300 MB repair takes minutes; say what is happening instead of going silent.
         chosen, _ = _resolve_strategy(src, d, args)
@@ -637,9 +653,18 @@ def main(argv: list[str] | None = None) -> int:
     # Without this, `not argv` is true for every real invocation and the no-argument shortcut
     # swallows the command line: `mediarescue scan x` would open the menu instead of scanning.
     argv = list(sys.argv[1:] if argv is None else argv)
-    ap = argparse.ArgumentParser(prog="mediarescue",
-                                 description="Diagnose and repair damaged media; originals are never modified.")
-    ap.add_argument("--version", action="version", version=__version__)
+    ap = argparse.ArgumentParser(
+        prog="mediarescue",
+        description="Diagnose and repair damaged media; originals are never modified.",
+        epilog=(
+            "the usual first two commands:\n"
+            "  mediarescue scan D:/broken\n"
+            "  mediarescue fix D:/broken --out-dir D:/fixed\n"
+            "run with no arguments for the menu."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    ap.add_argument("--version", action="version", version=f"mediarescue {__version__}")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("scan", help="classify damage across files or directories")
@@ -665,7 +690,7 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("file", nargs="+",
                    help="one media file, or one or more folders to repair in batch")
     f.add_argument("-o", "--out", help="output file (single input only)")
-    f.add_argument("--out-dir", help="batch: write repaired files into this folder")
+    f.add_argument("--out-dir", help="write repaired files into this folder (one file or a batch)")
     f.add_argument("--force", action="store_true",
                    help="repair files that scan calls healthy instead of skipping them")
     f.add_argument("--quiet", action="store_true",
