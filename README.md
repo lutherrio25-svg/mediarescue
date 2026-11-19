@@ -72,7 +72,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.4.0 — doctor
+mediarescue 0.5.2 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -87,8 +87,12 @@ ready: everything this tool needs is present
 
 `opt` marks an optional helper: the tool is ready without it, it just repairs fewer formats.
 Anything *required* that is missing is printed as `FAIL` together with the command that fixes
-it, and the exit code is 1. It checks the folder repairs will write into — pass
-`--workdir D:/fixed` if that is not the one you are standing in.
+it, and the exit code is 1.
+
+The `write access` line checks the folder you are standing in, and a read-only one is not a
+problem — Git Bash opened from the Start menu sits in `C:\Program Files\Git`, and the tool still
+writes every repaired copy beside the original. Pass `--workdir D:/fixed` only when you want the
+check to test a specific folder.
 
 ## All-in-one menu
 

@@ -58,3 +58,47 @@ def test_mp3val_is_listed_in_the_checks(monkeypatch, tmp_path):
     # A machine without mp3val is still ready: it just repairs fewer formats.
     code, text = doctor_mod.doctor(tmp_path)
     assert code == 0, text
+
+
+def test_a_read_only_working_folder_is_not_a_failure(monkeypatch, tmp_path):
+    """Git Bash started from the Start menu sits in C:\\Program Files\\Git, which is read-only.
+
+    Repairs are written beside each source file, so that must not read as "not ready" -- it told a
+    beginner the tool was broken when nothing was wrong.
+    """
+    monkeypatch.setattr(doctor_mod, "_can_write", lambda p: False)
+    monkeypatch.setattr(doctor_mod, "_scratch_folder", lambda: tmp_path)
+    check = doctor_mod._write_check(tmp_path, explicit=False)
+    assert check.ok
+    assert "read-only" in check.detail and "beside your files" in check.detail
+
+
+def test_a_folder_the_user_asked_for_must_be_writable(monkeypatch, tmp_path):
+    monkeypatch.setattr(doctor_mod, "_can_write", lambda p: False)
+    monkeypatch.setattr(doctor_mod, "_scratch_folder", lambda: tmp_path)
+    check = doctor_mod._write_check(tmp_path, explicit=True)
+    assert not check.ok
+    assert "read-only" in check.hint
+
+
+def test_a_missing_folder_says_so_instead_of_blaming_permissions(tmp_path):
+    check = doctor_mod._write_check(tmp_path / "typo", explicit=True)
+    assert not check.ok
+    assert "no such folder" in check.detail
+
+
+def test_a_read_only_current_directory_still_reports_ready(monkeypatch, tmp_path):
+    import pathlib
+
+    monkeypatch.setattr(doctor_mod, "FFMPEG", "ffmpeg")
+    monkeypatch.setattr(doctor_mod, "FFPROBE", "ffprobe")
+    monkeypatch.setattr(pathlib.Path, "cwd", classmethod(lambda cls: tmp_path / "Program Files"))
+    monkeypatch.setattr(doctor_mod, "_can_write",
+                        lambda p: str(p) == str(tmp_path))
+    monkeypatch.setattr(doctor_mod, "_scratch_folder", lambda: tmp_path)
+    monkeypatch.setattr(doctor_mod, "_space_check", lambda w: doctor_mod.Check("disk space", True, "60 GB free"))
+    (tmp_path / "Program Files").mkdir()
+    code, text = doctor_mod.doctor(None)
+    assert code == 0, text
+    assert "read-only" in text
+    assert "ready: everything" in text

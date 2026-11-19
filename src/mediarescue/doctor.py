@@ -67,19 +67,53 @@ def _tool_check(name: str, exe: str) -> Check:
     return Check(name, True, version)
 
 
-def _write_check(workdir: Path) -> Check:
+def _can_write(workdir: Path) -> bool:
     try:
         with tempfile.NamedTemporaryFile(dir=workdir, prefix=".mediarescue-", delete=True) as f:
             f.write(b"ok")
+        return True
+    except OSError:
+        return False
+
+
+def _scratch_folder() -> Path | None:
+    """Somewhere writable for scratch files, when the working folder is read-only."""
+    for candidate in (Path(tempfile.gettempdir()), Path.home()):
+        if candidate.is_dir() and _can_write(candidate):
+            return candidate
+    return None
+
+
+def _write_check(workdir: Path, explicit: bool = False) -> Check:
+    """Readiness, not pedantry: a repair writes beside the source file.
+
+    Launching Git Bash from the Start menu puts you in `C:\\Program Files\\Git`, which is
+    read-only, and the old check called that "not ready" -- a beginner reading the menu would
+    think the tool was broken when nothing was wrong. Only a folder the user explicitly asked for,
+    or a machine with nowhere at all to write, is a real failure.
+    """
+    if not workdir.exists():
+        return Check("write access", False, f"no such folder: {workdir}",
+                     "create it, or pass --workdir with a folder that exists")
+    if _can_write(workdir):
         return Check("write access", True, str(workdir))
-    except OSError as exc:
-        return Check("write access", False, f"cannot write to {workdir}: {exc.strerror or exc}",
-                     "pick another output folder with --workdir")
+    scratch = _scratch_folder()
+    if scratch is not None and not explicit:
+        # The exact scratch path is a long, often 8.3-shortened TEMP name; what matters to the
+        # reader is that nothing is wrong and where their repaired copies will appear.
+        return Check("write access", True,
+                     f"{workdir} is read-only (normal); repairs are written beside your files")
+    return Check("write access", False, f"cannot write to {workdir}",
+                 "that folder is read-only -- repairs can write beside each file instead, "
+                 "or point --workdir at a writable folder" if explicit else "pick another folder")
 
 
 def _space_check(workdir: Path) -> Check:
+    target = workdir
+    while not target.exists() and target != target.parent:
+        target = target.parent
     try:
-        free = shutil.disk_usage(workdir).free
+        free = shutil.disk_usage(target).free
     except OSError as exc:
         return Check("disk space", False, f"cannot read free space: {exc}", "")
     human = f"{free / (1 << 30):.1f} GB free"
@@ -98,6 +132,7 @@ def _optional_tool(name: str, path: str | None, gain: str, hint: str) -> Check:
 def run_checks(workdir: Path | None = None) -> list[Check]:
     from .external import mp3val_path
 
+    explicit = workdir is not None
     workdir = Path(workdir) if workdir else Path.cwd()
     py = ".".join(str(n) for n in sys.version_info[:3])
     checks = [
@@ -109,7 +144,7 @@ def run_checks(workdir: Path | None = None) -> list[Check]:
         _optional_tool("mp3val", mp3val_path(),
                        "damaged MP3 frame streams can be rebuilt",
                        "download mp3val, or set MEDIARESCUE_MP3VAL to its path"),
-        _write_check(workdir),
+        _write_check(workdir, explicit=explicit),
         _space_check(workdir),
     ]
     return checks

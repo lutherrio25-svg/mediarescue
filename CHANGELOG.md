@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.2
+
+Found by pressing `1` in the menu on a machine where Git Bash had opened in `C:\Program Files\Git`:
+the tool declared itself "not ready" when nothing was wrong.
+
+- **Fixed:** `doctor` treated a read-only working folder as a failure. Repairs are written beside
+  each source file, so the folder you happen to be standing in decides nothing; it is now reported
+  as `ok` with `C:\Program Files\Git is read-only (normal); repairs are written beside your files`.
+  A failure is still raised when the folder *you named* with `--workdir` cannot be written, or when
+  the machine has nowhere at all to write.
+- **Fixed:** a `--workdir` that does not exist now says `no such folder: ...` instead of implying a
+  permission problem, and the disk-space check walks up to the nearest existing parent rather than
+  failing as well.
+- Exit code follows the same rule: ready means a repair could run right now.
+
 ## 0.5.1
 
 Found by pointing 0.5.0 at a real damaged folder and piping it into `head`, the way anyone reading
