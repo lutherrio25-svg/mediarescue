@@ -41,6 +41,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # A re-pushed tag (fixing a just-released build) must replace the release instead of
+          # failing with "a release with the same tag name already exists".
+          gh release delete "$GITHUB_REF_NAME" --yes || true
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "${GITHUB_REF_NAME#v}" \
             --notes-file notes.md
