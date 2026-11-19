@@ -398,14 +398,15 @@ def _fix_batch(targets: list[Path], args) -> int:
     if out_dir:
         print(paint(f"output folder: {out_dir}", "dim"))
     if need_ref:
-        # Say what a reference actually is, once, with a copy-pasteable command — the per-file
-        # reasons above are long; this is the part a beginner acts on.
-        folder = need_ref[0][0].parent
-        out = out_dir or folder / "recovered"
+        # Say what a reference actually is, once, with a copy-pasteable command per folder — the
+        # per-file reasons above are long; this is the part a beginner acts on.
         print(paint(f"how to fix the other {len(need_ref)}: they need one intact file from the "
-                    f"same source (same phone, app or download site — not the same video). Run:", "yellow"))
-        print(paint(f'  mediarescue fix "{folder}" --out-dir "{out}" '
-                    f'--reference "C:/path/to/one-intact-file.mp4"', "yellow"))
+                    f"same source (same phone, app or download site — not the same video). "
+                    f"Run once per folder:", "yellow"))
+        for folder in dict.fromkeys(f.parent for f, _ in need_ref):
+            out = out_dir or folder / "recovered"
+            print(paint(f'  mediarescue fix "{folder}" --out-dir "{out}" '
+                        f'--reference "C:/path/to/one-intact-file.mp4"', "yellow"))
     return 1 if left else 0
 
 
