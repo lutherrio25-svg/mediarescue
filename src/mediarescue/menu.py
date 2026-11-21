@@ -35,6 +35,7 @@ CHOICES: list[tuple[str, str]] = [
     ("4", "Repair every damaged file in a folder"),
     ("5", "Show the damage classes"),
     ("6", "Find a file's original online"),
+    ("7", "Check a file really decodes"),
     ("0", "Quit"),
 ]
 
@@ -45,6 +46,7 @@ HINTS = {
     "4": "skips the healthy ones",
     "5": "one line per class",
     "6": "searches the web first",
+    "7": "every frame, not just headers",
     "0": "close the menu",
 }
 
@@ -57,6 +59,7 @@ Damage classes, and the repair each one triggers
   missing-trailer   mdat past EOF, moov inside    salvage, then trim
   fragmented        starts at moof, init lost     flatten or carve
   missing-atoms     ftyp+mdat there, moov gone    graft or carve
+  mkv-headless      EBML header cut, clusters ok  transplant Info+Tracks
   headerless        nothing parses at offset 0    not repairable
   empty             0 bytes                       nothing to rebuild
 
@@ -335,6 +338,11 @@ def run_menu(reader: Reader = input, writer: Writer = print,
             last = run(argv)
         elif choice == "5":
             writer(DAMAGE_HELP)
+        elif choice == "7":
+            path = _ask_path(reader, writer, "  file to decode> ")
+            if path is None:
+                continue
+            last = run(["verify", str(path)])
         elif choice == "6":
             path = _ask_path(reader, writer, "  damaged file> ")
             if path is None:
