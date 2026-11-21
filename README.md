@@ -75,7 +75,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.8.0 — doctor
+mediarescue 0.9.0 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -104,17 +104,20 @@ No flags to remember: run `mediarescue` with no arguments in a terminal and you 
 ![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png)
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│ mediarescue 0.8.0                                                          │
-│ repair damaged video and audio files; originals are never touched          │
-└────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ mediarescue 0.9.0                                                            │
+│ repair damaged video and audio files; originals are never touched            │
+└──────────────────────────────────────────────────────────────────────────────┘
+
      1  Check this machine can repair files    ffmpeg, ffprobe, disk space
      2  Look at a file or folder               what's wrong, no changes
   ▸  3  Repair one file                        leaves the original alone
      4  Repair every damaged file in a folder  skips the healthy ones
      5  Show the damage classes                one line per class
      6  Find a file's original online          searches the web first
+     7  Check a file really decodes            every frame, not just headers
      0  Quit                                   close the menu
+
   ↑/↓ move  ·  Enter choose  ·  0 quits
 ```
 
@@ -156,8 +159,9 @@ with your own path already filled in. Add `--out report.json` to keep the full d
 `C:\media` in that screenshot is a placeholder folder, not a real machine; the paths are otherwise
 exactly what the tool printed.
 
-That reads headers only. Add `--deep` to decode every file as well — slower, but it is the only
-way to catch damage inside MP3/MKV/AVI, or a junk payload hiding behind a perfect index:
+That reads headers only — for Matroska it also confirms the EBML header, `Info` and `Tracks`
+parse. Add `--deep` to decode every file as well — slower, but it is the only way to catch damage
+inside MP3/AVI, or a junk payload hiding behind a perfect index or behind intact Matroska headers:
 
 ```bash
 mediarescue scan "D:/broken-file" --deep
@@ -219,6 +223,20 @@ mediarescue fix "D:/broken-file" --out-dir "D:/fixed"
 inside. A full decode is the real test — **silence means it worked**:
 
 ```bash
+mediarescue verify "D:/fixed/clip.mp4"
+```
+
+```
+clean       12.08s  clip.mp4  every frame decoded
+```
+
+`verify` runs the same decode-and-count check `fix` applies to its own output, so you can put a
+file repaired by anything — this tool, another program, a friend's laptop — through the same gate.
+Exit code `0` means every frame decoded, `1` means decode errors (it prints how many and the first
+one), `2` a missing file, `3` no ffmpeg. `--seconds 30` checks only the opening half-minute,
+`--json` gives the same result as data. The raw command behind it is:
+
+```bash
 ffmpeg -v error -i "D:/fixed/clip.mp4" -f null -
 ```
 
@@ -234,14 +252,15 @@ Nothing printed means the frames really decode. Then open the file and look at i
 | Starts mid-scene, first seconds are garbage | `mediarescue fix broken.mp4 -o fixed.mp4` (`auto` picks `salvage`) |
 | Video plays, audio clicks or drops out | run the decode check first; audio payload that is gone cannot be invented |
 | File is 0 bytes | nothing to recover — re-download or restore a backup |
+| MKV/WebM will not open at all, `scan` says `mkv-headless` | `mediarescue fix broken.mkv --reference intact.mkv -o fixed.mkv` |
 | Everything already looks fine | `mediarescue fix good.mp4 -o copy.mp4` rewrites the container cleanly |
 | Damaged file, and you have no intact copy anywhere | `mediarescue source bad.mp4` searches the web for the original and repairs with it |
 
 ## The one thing that trips everyone up: `--reference`
 
-Two damage classes — `fragmented` and `missing-atoms` — mean the file lost the index that says
-*where each frame starts*. That index cannot be guessed back, so the tool needs a second,
-undamaged file to borrow the layout from:
+Three damage classes — `fragmented`, `missing-atoms` and `mkv-headless` — mean the file lost the
+index or header that says *where each frame starts* and *what each track is*. That cannot be
+guessed back, so the tool needs a second, undamaged file to borrow the layout from:
 
 ```bash
 mediarescue fix dash-segment.mp4 --reference intact.mp4 -o fixed.mp4
@@ -259,6 +278,75 @@ What counts as a good reference:
 No reference anywhere? The tool looks for one itself: a healthy file **in the same folder** whose
 video codec matches is picked automatically, and the choice is reported in the output
 (`"reference": "…"`). Only when that fails does it fall back to `--strategy carve`.
+
+## A Matroska file whose header is gone
+
+An MKV, MKA or WebM starts with an EBML header, then `Info` (timescale, title) and `Tracks` (one
+entry per stream: codec, resolution, sample rate). Cut off the front of the file — an interrupted
+copy, a resume that landed at the wrong offset, a camera that lost power — and every cluster after
+the damage is still intact, but nothing says which track number carries video and which carries
+audio. `ffmpeg` will not even open the file: *EBML header parsing failed*.
+
+`scan` names it `mkv-headless`, with the byte offset of the first intact cluster:
+
+```
+severity                bytes  fix  file
+mkv-headless          590,643  yes  D:\broken\lecture.mkv
+healthy               908,681  yes  D:\broken\lecture-full.mkv
+
+2 scanned, 1 damaged, 1 repairable, 1 need a reference file
+next: mediarescue fix "D:\broken" --out-dir "D:\broken\recovered"
+those need --reference: an intact file recorded the same way, see --help
+```
+
+A reference is required, and this is the one case where that is not a limitation of the tool: the
+track table existed in the header and nowhere else, so there is nothing in the damaged bytes to
+rebuild it from. What the repair does instead is a transplant:
+
+- copy the reference's EBML header, `Info` and `Tracks` verbatim;
+- write a new `Segment` of unknown size and append the damaged file's clusters, starting at the
+  first intact one;
+- rewrite each cluster's `Timestamp` so playback starts at zero;
+- drop the old `Cues` (they described the clusters that are gone) and remux, so `ffmpeg` writes a
+  fresh index.
+
+Nothing is re-encoded, and the damaged file is only ever read:
+
+```bash
+mediarescue fix "D:/broken/lecture.mkv" --reference "D:/broken/lecture-full.mkv" -o "D:/fixed/lecture.mkv"
+```
+
+```
+working: salvage-mkv → lecture.repaired.mkv
+diagnosis: mkv-headless — the EBML header is gone, but an intact Cluster starts at byte 42,752:
+           the clusters after it carry everything except the track table, which any healthy file
+           of the same source can supply
+{
+  "ok": true,
+  "output": "D:/fixed/lecture.mkv",
+  "notes": [
+    "rebuilt Info and Tracks for 2 track(s) from the reference: the first 7.941s were cut away with the original header",
+    "the old Cues were dropped with the header; the remux writes a fresh index",
+    "reference picked automatically: lecture-full.mkv"
+  ],
+  "dropped_seconds": 7.941,
+  "clusters": 6,
+  "reference": "D:/broken/lecture-full.mkv",
+  "verify": { "ok": true, "decode_errors": 0 },
+  "strategy": "salvage-mkv",
+  "source_untouched": true
+}
+```
+
+Leave out `--reference` and it looks for a healthy Matroska beside the damaged file (same folder,
+sub-folders, one level up), ranked by shared name words then by size, and it will try each
+candidate in turn — a reference can match the name and the size and still be a different encode,
+so every attempt is decoded in full before it is accepted. `--find-source` goes online for the
+original when nothing local fits.
+
+What it cannot give back: the seconds before the first intact cluster (`dropped_seconds`), the
+original `Cues`, and tags, chapters and attachments that lived in the header. Those bytes are
+gone, so the output simply does not have them rather than pretending to.
 
 ## When the intact file is online instead of on your disk
 
@@ -364,7 +452,8 @@ This is a repair tool, not a magic wand:
 | `fragmented` | starts at `moof`/`mdat`, init segment lost | `flatten` (or `carve` without a reference) | yes |
 | `missing-atoms` | `ftyp`+`mdat` present, `moov` gone | `graft` (or `carve` without a reference) | yes |
 | `corrupt-index` | AVI: `idx1` missing, or its entries point past the chunk they name | `remux` with `+ignidx` | no |
-| `headerless` | no parsable box, large zero regions | not repairable locally | — |
+| `mkv-headless` | Matroska/WebM: EBML header cut, `Info`+`Tracks` gone, clusters intact | `salvage-mkv` (transplant the head) | yes |
+| `headerless` | no parsable box or cluster at offset 0 | not repairable locally | — |
 | `empty` | 0 bytes | not repairable | — |
 
 ### Strategies
@@ -388,6 +477,12 @@ This is a repair tool, not a magic wand:
   `KEY_FRAME` — and stream-copies from that timestamp. The cut is reported, so you know exactly
   how much was lost and how much is bit-identical. Nothing is re-encoded, and the corrupt head is
   dropped rather than concealed — a frozen frame over dead data helps nobody.
+- **salvage-mkv** — for a Matroska whose EBML header, `Info` and `Tracks` were cut away. Copies
+  the reference's header, `Info` and `Tracks`, writes a `Segment` of unknown size, appends the
+  damaged file's clusters from the first intact one, rebases every cluster timestamp to zero and
+  drops the stale `Cues`, then remuxes so a fresh index is written. No re-encode; it refuses when
+  the reference has no `Info`/`Tracks`, when the damaged file has no cluster left, or when the
+  damaged clusters use a track number the reference does not define.
 - **carve** — the last resort when the index is gone *and* there is no reference file: walk the
   raw `mdat` for length-prefixed NAL units, rebuild an Annex-B stream and let ffmpeg write a
   fresh index. It needs two things the file may not have: **SPS/PPS in-band** (encoders usually
@@ -396,8 +491,9 @@ This is a repair tool, not a magic wand:
   the index). It recovers **video only**, and the frame rate is assumed — pass `--fps` to correct
   it. When either condition fails it says so instead of writing a file that looks fine.
 
-Force one explicitly with `--strategy trim|remux|graft|flatten|salvage|carve`. If audio and video
-durations still disagree after a `flatten`, give every track one clock with `--timescale 90000`.
+Force one explicitly with
+`--strategy trim|remux|graft|flatten|salvage|salvage-mkv|carve`. If audio and video durations still
+disagree after a `flatten`, give every track one clock with `--timescale 90000`.
 
 ```bash
 # No index and no reference file: rebuild what the payload still holds
@@ -412,10 +508,17 @@ mediarescue fix damaged.mp4 -o rebuilt.mp4 --strategy carve --fps 30
   require **zero** output lines.
 - `corrupt-payload` is decided by parsing the first video sample: H.264 must tile as
   length-prefixed NALs, AV1 must frame as OBUs. Anything else counts as junk.
-- Damage inside **MP3, WAV, FLAC, OGG, AAC, MKA, MKV, AVI, GIF and WEBP is not inspected by the
-  header scan**: those containers are reported as `healthy` as soon as they are readable, so a
-  file with a mangled middle still scans clean. `scan --deep` catches it by decoding, and
-  `fix --deep` applies the same check to the input.
+- Damage inside **MP3, WAV, FLAC, OGG, AAC, GIF and WEBP** is not inspected by the header scan:
+  those containers are reported as `healthy` as soon as they are readable, so a file with a
+  mangled middle still scans clean. AVI gets its index checked, Matroska is checked one level
+  deeper — the EBML header, `Info` and `Tracks` must parse — but neither payload is walked.
+  `scan --deep` catches all of it by decoding, and `fix --deep` applies the same check to the
+  input.
+- `mkv-headless` needs a reference that describes the same tracks: the transplant copies the
+  reference's codec configuration, so a 1080p reference for a 720p recording produces a file that
+  opens and plays at the wrong geometry instead of failing. The automatic pick is tried and
+  decoded in full before it is accepted; a hand-picked `--reference` is trusted, so match the
+  source.
 - AV1 is cut at its own KEY_FRAME now, but a damaged AV1 head is only recoverable when a later
   keyframe exists **and** the sequence header travels in-band; otherwise nothing can decode it.
 - `carve` works only when SPS/PPS travel in-band and video samples are contiguous; it recovers

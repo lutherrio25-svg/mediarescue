@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.9.0
+
+Matroska files that lost their head used to be a dead end: `ffmpeg` refuses them outright, the
+scan called them healthy as soon as the bytes were readable, and no flag could help. They are now
+a named damage class with a repair that keeps every intact frame.
+
+- **New damage class: `mkv-headless`.** An MKV, MKA or WebM whose EBML header was cut away —
+  interrupted copy, a resume at the wrong offset, a camera that died mid-write — still has intact
+  clusters after the cut, but nothing left that says which track is video, which is audio, or what
+  codec either uses. `scan` now finds the first intact cluster, reports its byte offset, and names
+  the file `mkv-headless` instead of `healthy`. `.webm` is scanned at all for the first time.
+- **New strategy: `salvage-mkv`.** It transplants the missing head: the reference's EBML header,
+  `Info` and `Tracks` are copied verbatim, a `Segment` of unknown size is written, the damaged
+  file's clusters are appended from the first intact one, every cluster `Timestamp` is rebased so
+  playback starts at zero, and the stale `Cues` are dropped. The result is remuxed so `ffmpeg`
+  writes a fresh index. Nothing is re-encoded and the damaged file is never written to.
+- **It refuses rather than guesses.** No `Info`/`Tracks` in the reference, no cluster left in the
+  damaged file, or a track number in the damaged clusters that the reference does not define —
+  each ends the attempt with a reason. With no `--reference`, a healthy Matroska next to the file
+  is tried (same folder, sub-folders, one level up), best name match first, and every candidate is
+  decoded in full before its output is kept; `--find-source` falls back to the web.
+- **New command: `mediarescue verify`.** Decodes one or more files in full and says whether every
+  frame came out: exit `0` clean, `1` decode errors, `2` missing file, `3` no ffmpeg. `--seconds`
+  limits the check, `--json` makes it scriptable. It is the same gate `fix` applies to its own
+  output, now available for files another tool repaired.
+- **The menu gained a row**, `7  Check a file really decodes`, and the damage-class list includes
+  `mkv-headless`. The frame still fits 80 columns.
+- **`scan`'s `next:` hint now keeps `--deep`.** A scan that needed a decode to see the damage used
+  to suggest a plain `fix`, which re-diagnoses each file and would have called those files
+  healthy — the one line that is supposed to save you from guessing sent you the wrong way.
+- **The EBML work is a real parser, not a byte hunt.** `ebml.py` reads IDs, sizes (including the
+  unknown-size form), children and unsigned integers; `mkv.py` uses it to decide health, rank
+  references and write the transplant.
+- `pytest -q` is 879 passed, `ruff check .` is clean, and the rule set in `pyproject.toml` is
+  unchanged.
+
 ## 0.8.0
 
 Small things that made the tool feel unfinished, plus two rules that were quietly not kept.
