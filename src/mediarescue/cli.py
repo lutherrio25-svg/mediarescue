@@ -96,7 +96,10 @@ def cmd_scan(args) -> int:
         first = Path(args.paths[0])
         where = first if first.is_dir() else first.parent
         if repairable:
-            print(f"next: mediarescue fix \"{where}\" --out-dir \"{where / 'recovered'}\"")
+            # Keep the flag that produced this verdict: `fix` re-diagnoses each file, so without
+            # --deep it would call a file "healthy" that the scan just proved damaged.
+            keep = " --deep" if args.deep else ""
+            print(f"next: mediarescue fix \"{where}\"{keep} --out-dir \"{where / 'recovered'}\"")
         missing_ref = [d for d in bad if d.needs_reference]
         if missing_ref:
             print("those need --reference: an intact file recorded the same way, see --help")
