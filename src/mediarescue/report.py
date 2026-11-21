@@ -16,6 +16,9 @@ class Severity(str, Enum):
     MISSING_TRAILER = "missing-trailer"
     FRAGMENTED = "fragmented"
     MISSING_ATOMS = "missing-atoms"
+    # Matroska keeps its track table in one header at the front; when that header is cut away
+    # every cluster after it is still intact, so this is recoverable with a reference.
+    MKV_HEADLESS = "mkv-headless"
     HEADERLESS = "headerless"
     EMPTY = "empty"
     UNSUPPORTED = "unsupported"
@@ -27,7 +30,7 @@ class Severity(str, Enum):
     @property
     def needs_reference(self) -> bool:
         """True when an intact sibling file is required to rebuild the index."""
-        return self in (Severity.MISSING_ATOMS, Severity.FRAGMENTED)
+        return self in (Severity.MISSING_ATOMS, Severity.FRAGMENTED, Severity.MKV_HEADLESS)
 
 
 @dataclass

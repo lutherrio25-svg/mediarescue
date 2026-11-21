@@ -14,7 +14,7 @@ from .trim import find_tail_moov
 
 MEDIA_SUFFIXES = {
     ".mp4", ".m4v", ".mov", ".m4a", ".3gp",
-    ".mp3", ".wav", ".flac", ".ogg", ".aac", ".mka", ".mkv", ".avi",
+    ".mp3", ".wav", ".flac", ".ogg", ".aac", ".mka", ".mkv", ".webm", ".avi",
     ".jpg", ".jpeg", ".png", ".gif", ".webp",
 }
 
@@ -67,7 +67,32 @@ def _structural(path: str | Path, hash_file: bool = True) -> Diagnosis:
         return Diagnosis(str(p), size, sev, zero_byte_ratio=round(ratio, 4), notes=[note],
                          sha256=sha256_of(p) if hash_file else "")
 
-    # Pure audio/MKV etc. are handed to ffmpeg as-is; structure walk is MP4-only.
+    # Matroska keeps Info and Tracks in one header at the front, and every cluster after it is
+    # self-contained. Losing that header is the one "no moov" case that a reference can rebuild.
+    if suffix in (".mkv", ".mka", ".webm"):
+        from .mkv import check as mkv_check
+        info = mkv_check(p)
+        tracks = len(info.get("tracks_used") or [])
+        if info["header"]:
+            return Diagnosis(str(p), size, Severity.HEALTHY, zero_byte_ratio=round(ratio, 4),
+                             notes=[f"EBML header, Info and Tracks parse ({tracks} track(s))",
+                                    "payload not inspected: use --deep to decode it"],
+                             sha256=sha256_of(p) if hash_file else "")
+        if info["recoverable"]:
+            return Diagnosis(
+                str(p), size, Severity.MKV_HEADLESS, zero_byte_ratio=round(ratio, 4),
+                notes=[(f"the EBML header is gone, but an intact Cluster starts at byte "
+                        f"{info['cut']:,}: the clusters after it carry everything except the "
+                        f"track table, which any healthy file of the same source can supply"),
+                       ("ffmpeg refuses this file outright; repair = transplant Info+Tracks, "
+                        "keep the clusters, rebase timestamps")],
+                sha256=sha256_of(p) if hash_file else "")
+        return Diagnosis(str(p), size, Severity.HEADERLESS, zero_byte_ratio=round(ratio, 4),
+                         notes=[("no EBML header and no cluster anywhere in the file: nothing "
+                                 "survived that a track table could point at")],
+                         sha256=sha256_of(p) if hash_file else "")
+
+    # Pure audio and other containers are handed to ffmpeg as-is; the structure walk is MP4-only.
     if suffix == ".avi":
         from .avi import check as avi_check
         info = avi_check(p)
