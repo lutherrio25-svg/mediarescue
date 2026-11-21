@@ -17,6 +17,7 @@ SEVERITY_COLOUR = {
     Severity.MISSING_TRAILER: "yellow",
     Severity.FRAGMENTED: "yellow",
     Severity.MISSING_ATOMS: "yellow",
+    Severity.MKV_HEADLESS: "yellow",
     Severity.HEADERLESS: "red",
     Severity.EMPTY: "red",
     Severity.UNSUPPORTED: "red",
@@ -164,6 +165,9 @@ def _pick_strategy(severity: Severity, requested: str) -> str:
         Severity.MISSING_TRAILER: "salvage",
         Severity.CORRUPT_PAYLOAD: "salvage",
         Severity.FRAGMENTED: "flatten",
+        # Matroska's Tracks element is the only thing a cut head really took; transplanting it
+        # from a healthy file of the same source restores the rest of the footage untouched.
+        Severity.MKV_HEADLESS: "salvage-mkv",
         # AVI carries no sample table to rebuild; a remux that ignores idx1 and rescans movi
         # writes a fresh index, so the index damage is the whole repair.
         Severity.CORRUPT_INDEX: "remux",
@@ -207,7 +211,10 @@ def _carve_or_explain(src: Path, out: Path, fps: float, why: str) -> dict:
 
 
 def _repair_with_reference(src: Path, ref: Path, out: Path, args, strategy: str) -> dict:
-    """The two strategies that borrow an index, in one place so callers cannot drift apart."""
+    """The strategies that borrow an index, in one place so callers cannot drift apart."""
+    if strategy == "salvage-mkv":
+        from .mkv import salvage as salvage_mkv
+        return salvage_mkv(src, ref, out)
     if strategy == "flatten":
         from .fragmented import flatten
         return flatten(src, ref, out, force_timescale=args.timescale)
@@ -224,6 +231,27 @@ def _plays_without_errors(path: Path) -> bool:
         return False
     clean, _lines, _first = decode_check(path)
     return clean
+
+
+def _try_references(src: Path, out: Path, args, strategy: str, refs, note: str):
+    """Repair with each candidate in turn; keep the first result that decodes cleanly.
+
+    A Matroska reference can match a file's size and name and still be a different encode, so
+    every candidate is tried for real and the output is decoded in full before it is accepted.
+    """
+    rejected: list[str] = []
+    for ref in refs:
+        attempt = _repair_with_reference(src, ref, out, args, strategy)
+        if attempt.get("ok") and _plays_without_errors(Path(attempt["output"])):
+            attempt.setdefault("notes", []).append(f"{note}: {ref.name}")
+            attempt["reference"] = str(ref)
+            attempt["verify"] = {"ok": True, "decode_errors": 0}
+            return attempt, rejected
+        rejected.append(f"{ref.name} did not produce a clean file "
+                        f"({attempt.get('reason') or 'the rebuilt file did not decode'})")
+        Path(attempt.get("output") or out).unlink(missing_ok=True)
+        out.unlink(missing_ok=True)
+    return None, rejected
 
 
 def _online_references(src: Path, args):
@@ -367,6 +395,24 @@ def _repair(src: Path, out: Path, args, d) -> dict:
         result = {"ok": ok, "output": str(out) if ok else "", "log": log[-400:]}
     elif strategy == "carve":
         result = _carve_or_explain(src, out, args.fps, "carve requested explicitly")
+    elif strategy == "salvage-mkv" and not args.reference:
+        # No --reference: a script did not name one, so try the healthy Matroska files around it.
+        from .mkv import reference_candidates
+        result, rejected = _try_references(src, out, args, strategy, reference_candidates(src),
+                                           "reference picked automatically")
+        if result is None and getattr(args, "find_source", False):
+            found, more = _try_references(src, out, args, strategy, _online_references(src, args),
+                                          "original found online")
+            result, rejected = found, rejected + more
+        if result is None:
+            result = {
+                "ok": False, "strategy": strategy, "notes": rejected,
+                "reason": ("a cut Matroska head holds the only track table the file had, so it "
+                           "can only be rebuilt from another healthy file of the same source. "
+                           "No sibling matched and none was given: pass --reference <file.mkv> "
+                           "(any intact recording of the same material, from the same device, "
+                           "app or download) or add --find-source."),
+            }
     elif strategy in ("flatten", "graft") and not args.reference:
         # No --reference: look for a healthy sibling with the same codec before giving up on
         # the index entirely and falling back to carve.
@@ -750,10 +796,12 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--fps", type=float, default=25.0,
                    help="carve only: frame rate to assume when the index is lost (default 25)")
     f.add_argument("--strategy",
-                   choices=["auto", "remux", "graft", "flatten", "trim", "salvage", "carve"],
+                   choices=["auto", "remux", "graft", "flatten", "trim", "salvage", "carve",
+                            "salvage-mkv"],
                    default="auto",
                    help="salvage: trim, remux, then drop a head that was overwritten with junk; "
-                        "carve: rebuild video from the raw H.264 payload without a reference")
+                        "salvage-mkv: rebuild a Matroska head from --reference; carve: rebuild "
+                        "video from the raw H.264 payload without a reference")
     f.add_argument("--find-source", action="store_true",
                    help="when a file needs a reference and none was given, search the web for the "
                         "original upload and use it (Tavily when TAVILY_API_KEY is set, else "
