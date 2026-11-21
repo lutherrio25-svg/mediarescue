@@ -112,6 +112,42 @@ def cmd_doctor(args) -> int:
     return code
 
 
+def cmd_verify(args) -> int:
+    """Decode files in full and say whether every frame came out.
+
+    Header reads and box walks can both pass on a file whose pictures are garbage; this is the
+    one check that proves the payload. Standalone so a file repaired by another tool can be put
+    through the same gate that `fix` applies to its own output.
+    """
+    targets = [Path(p) for p in args.file]
+    missing = [t for t in targets if not t.exists()]
+    if missing:
+        for m in missing:
+            print(f"not found: {m}", file=sys.stderr)
+        return 2
+    if not have_ffmpeg():
+        print("ffmpeg is not on PATH: the decode check needs it", file=sys.stderr)
+        return 3
+    from .ffmpeg import decode_check
+    rows = []
+    for target in targets:
+        info = probe(target)
+        clean, lines, first = decode_check(target, args.seconds)
+        rows.append({"path": str(target), "ok": bool(info.get("ok")) and clean,
+                     "decode_errors": lines, "first_error": first,
+                     "duration": info.get("duration", 0), "streams": info.get("streams", [])})
+    paint = ui.colour_for(ui.enabled(override=False if args.no_color else None))
+    if args.json:
+        print(ui.printable(json.dumps(rows, indent=2)))
+    else:
+        for row in rows:
+            state = paint("clean   ", "green") if row["ok"] else paint("FAILED  ", "red")
+            detail = ("every frame decoded" if row["ok"] else
+                      f"{row['decode_errors']} decode error line(s) — {row['first_error']}")
+            print(f"{state} {row['duration']:8.2f}s  {Path(row['path']).name}  {detail}")
+    return 0 if all(row["ok"] for row in rows) else 1
+
+
 def cmd_menu(args) -> int:
     from .menu import make_key_reader, run_menu
     # Without a key reader the menu still works, but only by typing a number and Enter. On a real
@@ -749,6 +785,13 @@ def main(argv: list[str] | None = None) -> int:
     so.add_argument("--strategy", choices=["auto", "graft", "flatten", "carve"], default="auto",
                     help="what to do once the original is found (default: decide from the damage)")
     so.set_defaults(func=cmd_source)
+
+    v = sub.add_parser("verify", help="decode a file in full and report what did not come out")
+    v.add_argument("file", nargs="+", help="one or more media files")
+    v.add_argument("--seconds", type=float, help="stop after N seconds instead of the whole file")
+    v.add_argument("--json", action="store_true", help="machine-readable result")
+    v.add_argument("--no-color", action="store_true", help="never emit ANSI colour")
+    v.set_defaults(func=cmd_verify)
 
     m = sub.add_parser("menu", help="interactive all-in-one menu (also opens when run with no arguments)")
     m.set_defaults(func=cmd_menu)
