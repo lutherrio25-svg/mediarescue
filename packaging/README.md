@@ -58,8 +58,27 @@ every start, which is a visible delay for someone who just double-clicked an ico
 
 - **An unsigned exe is a warning, not a bug.** SmartScreen says "Unknown publisher" for every
   download that carries no trusted signature, and no amount of packaging changes that. `sign.ps1`
-  signs the two exes and the installer (timestamped, then verified), and `docs/SIGNING.md` lists the
-  routes with real prices — the free one is SignPath Foundation for open source.
+  signs the two exes and the installer (timestamped, then verified), and `docs/SIGNING.md` records
+  why the free route was declined and what a paid certificate actually buys.
+
+## Winget
+
+`packaging/winget/manifests/s/StarCorpsBks/MediaRescue/<version>/` holds the three manifests that make
+`winget install mediarescue` possible. Bump all three `PackageVersion` fields and the `InstallerUrl`
+together with a release; `tests/test_packaging.py` fails if any of them, the digest, or the `Scope`
+drifts from `packaging/mediarescue.iss`.
+
+Two things cost real time to find:
+
+- **The default locale manifest must say `ManifestType: defaultLocale`.** Label it `locale` and `winget
+  validate` answers *"the multi file manifest is incomplete"* — an error that names no file at all, no
+  matter which of the three is wrong.
+- **`winget install --manifest` is disabled by default.** It needs
+  `winget settings --enable LocalManifestFiles` from an elevated shell; without that it prints the help
+  text and exits, which reads like a syntax error rather than a policy.
+
+`winget validate --manifest <dir>` is the check that matters; a clean run prints
+`Manifest validation succeeded.` and nothing else.
 
 - **A layout bug fails exactly like a crash.** `ttk.Label(...).grid(row=8, ..., **pad)` passed
   `pady` twice, and Tk raised `duplicate keyword` at widget-build time: the window never appeared,

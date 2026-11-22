@@ -62,6 +62,51 @@ def test_the_signing_script_timestamps_and_verifies():
     assert "AllowUntrusted" in text, "a self-signed rehearsal must be possible without weakening releases"
 
 
+WINGET = ROOT / "packaging" / "winget" / "manifests" / "s" / "StarCorpsBks" / "MediaRescue"
+
+
+def _field(text: str, name: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(f"{name}:"):  # Installers is a list, so the key arrives indented
+            return stripped.split(":", 1)[1].strip().strip('"')
+    raise AssertionError(f"{name} is missing from the manifest")
+
+
+def test_the_winget_manifest_describes_the_installer_we_publish():
+    """A manifest that drifts from the release installs the wrong bytes, silently."""
+    folder = WINGET / __version__
+    assert folder.is_dir(), f"no winget manifest for {__version__}"
+    ver = (folder / "StarCorpsBks.MediaRescue.yaml").read_text(encoding="utf-8")
+    inst = (folder / "StarCorpsBks.MediaRescue.installer.yaml").read_text(encoding="utf-8")
+    loc = (folder / "StarCorpsBks.MediaRescue.locale.en-US.yaml").read_text(encoding="utf-8")
+
+    assert _field(ver, "PackageVersion") == __version__
+    assert _field(inst, "PackageVersion") == __version__
+    assert _field(loc, "PackageVersion") == __version__
+
+    # winget decides which file is which by ManifestType. The default locale must say
+    # "defaultLocale": call it "locale" and the client answers "the multi file manifest is
+    # incomplete" -- an error that names no file, and cost an hour to find.
+    assert _field(ver, "ManifestType") == "version"
+    assert _field(inst, "ManifestType") == "installer"
+    assert _field(loc, "ManifestType") == "defaultLocale"
+    assert _field(ver, "DefaultLocale") == "en-US"
+
+    # Point at the tag, never /releases/latest: a manifest that follows latest installs bytes the
+    # digest below it does not describe.
+    url = _field(inst, "InstallerUrl")
+    assert url.endswith(f"/download/v{__version__}/mediarescue-{__version__}-setup.exe"), url
+    digest = _field(inst, "InstallerSha256")
+    assert len(digest) == 64 and set(digest) <= set("0123456789ABCDEF"), digest
+
+    # Per-user install: the .iss installs with PrivilegesRequired=lowest, so a manifest that claims
+    # machine scope would ask for an elevation the installer never needed.
+    iss = (ROOT / "packaging" / "mediarescue.iss").read_text(encoding="utf-8")
+    assert "PrivilegesRequired=lowest" in iss
+    assert _field(inst, "Scope") == "user"
+
+
 def test_the_free_signing_route_is_documented_and_inert():
     doc = (ROOT / "docs" / "SIGNING.md").read_text(encoding="utf-8")
     assert "SignPath Foundation" in doc and "free" in doc
