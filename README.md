@@ -125,6 +125,23 @@ problem — Git Bash opened from the Start menu sits in `C:\Program Files\Git`, 
 writes every repaired copy beside the original. Pass `--workdir D:/fixed` only when you want the
 check to test a specific folder.
 
+## Windows build and code signing
+
+The installer and both executables are built in CI from this repository on every tag, so the file you
+download is the file this source produced. They are **not code signed yet**: the project is applying
+for free code signing through the [SignPath Foundation](https://signpath.org/), which signs open
+source binaries in its own pipeline and vouches that they were built from the public repository. Until
+that is granted, Windows shows `Unknown publisher` when the installer downloads — that is the missing
+signature, not a problem with the file. Once granted, the same pipeline signs what it builds and the
+publisher shown will be `SignPath Foundation`.
+
+In the meantime, check the hash GitHub lists beside the asset (or the one in the release notes) before
+running it:
+
+```powershell
+Get-FileHash .\mediarescue-0.13.0-setup.exe -Algorithm SHA256
+```
+
 ## All-in-one menu
 
 No flags to remember: run `mediarescue` with no arguments in a terminal and you get a menu.
