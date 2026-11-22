@@ -111,6 +111,10 @@ function Find-SignTool {
 $targets = Get-Targets -Paths $Path
 $signtool = Find-SignTool
 
+# Everything after the import runs inside try/finally: a verification failure must not be able to
+# leave a code-signing private key sitting in a shared runner's certificate store.
+try {
+
 # Resolve the certificate once, so a wrong thumbprint fails before anything is touched.
 $certificate = $null
 $imported = $null
@@ -120,7 +124,7 @@ if ($PSCmdlet.ParameterSetName -eq "Pfx") {
     # Imported into the user store so the private key is usable, then removed at the end: a key
     # left behind on a shared runner is a leak waiting for someone with less to lose.
     $imported = Import-PfxCertificate -FilePath $PfxPath -CertStoreLocation Cert:\CurrentUser\My `
-        -Password $secure -ExportPolicy Exportable
+        -Password $secure
     $certificate = $imported
 }
 else {
@@ -193,7 +197,10 @@ if ($Verify) {
     else { Write-Host "every file is signed by a certificate Windows trusts" }
 }
 
-if ($imported) {
-    Remove-Item -Path ("Cert:\CurrentUser\My\" + $imported.Thumbprint) -Force
-    Write-Host "removed the imported certificate and its private key from this machine"
+}
+finally {
+    if ($imported) {
+        Remove-Item -Path ("Cert:\CurrentUser\My\" + $imported.Thumbprint) -Force -ErrorAction SilentlyContinue
+        Write-Host "removed the imported certificate and its private key from this machine"
+    }
 }
