@@ -33,6 +33,12 @@ command to type. The installer is per-user (no admin prompt), it carries ffmpeg 
 never touches your `PATH`. The exe and the installer are built by CI for every release, so they
 cannot drift from the code.
 
+`winget install StarCorpsBks.MediaRescue` will do the same thing without the dig through the releases
+page, once the package is accepted into the community repository — the manifest is
+[in review as PR #486460](https://github.com/microsoft/winget-pkgs/pull/486460), all ten validation
+stages passed, and a volunteer moderator has the last word. Until then, the installer above is the
+same file that manifest points at.
+
 The Start Menu gets two entries: **mediarescue** (the window) and **mediarescue (command line)**
 (the same program with a console, for scripts and for anyone who prefers typing). Both live in one
 folder and share one ffmpeg.
