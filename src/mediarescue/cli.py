@@ -623,16 +623,24 @@ def _fix_single(src: Path, args) -> int:
     paint = ui.colour_for(ui.enabled(override=False if getattr(args, "no_color", False) else None))
     d = diagnose(src, hash_file=False, deep=args.deep)
     label = paint(d.severity.value, SEVERITY_COLOUR.get(d.severity, ""))
-    print(f"diagnosis: {label} — {'; '.join(d.notes)}")
+    # Prose goes to stderr so `fix` can keep its promise that stdout is the verdict: with the
+    # diagnosis line on stdout, `mediarescue fix clip.mp4 | jq` failed on line 1 of valid JSON.
+    print(f"diagnosis: {label} — {'; '.join(d.notes)}", file=sys.stderr)
     if d.severity in (Severity.EMPTY, Severity.UNSUPPORTED, Severity.HEADERLESS):
         print(f"refusing: {d.severity.value} is not repairable by this tool "
               f"(no stream payload to rebuild from)", file=sys.stderr)
         return 2
     if d.severity == Severity.HEALTHY and not getattr(args, "force", False):
         # Rewriting a healthy file produced a byte-for-byte equivalent copy and took minutes on a
-        # large one; say so instead, and leave --force for the deliberate case.
-        print(paint("nothing to repair: this file already reads cleanly "
-                    "(use --force to rewrite it anyway)", "green"))
+        # large one; say so instead, and leave --force for the deliberate case. It still owes the
+        # caller a verdict in the shape the mode asked for -- an empty stdout is not an answer.
+        reason = "nothing to repair: this file already reads cleanly (use --force to rewrite it)"
+        if getattr(args, "brief", False):
+            print("none: nothing to repair — this file already reads cleanly "
+                  "(use --force to rewrite it)")
+        else:
+            print(json.dumps({"ok": True, "file": str(src), "severity": d.severity.value,
+                              "strategy": "none", "output": "", "reason": reason}, indent=2))
         return 0
     if not have_ffmpeg():
         print("ffmpeg/ffprobe not found on PATH", file=sys.stderr)

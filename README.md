@@ -15,7 +15,7 @@ heads, fragmented MP4s that lost their init segment, downloads that never finish
 is gone and no intact copy exists anywhere, it can search the web for the original upload and
 repair with that.
 
-![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png?v=0.9.2)
+![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png?v=0.9.3)
 
 The screenshot is a real session: `scan` on a folder holding one healthy MP4, one healthy MP3, one
 AVI whose `idx1` points at the wrong chunks, and one AVI whose index was cut off. Every line below a
@@ -75,7 +75,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.9.2 — doctor
+mediarescue 0.9.3 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -101,11 +101,11 @@ check to test a specific folder.
 
 No flags to remember: run `mediarescue` with no arguments in a terminal and you get a menu.
 
-![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png?v=0.9.2)
+![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png?v=0.9.3)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ mediarescue 0.9.2                                                            │
+│ mediarescue 0.9.3                                                            │
 │ repair damaged video and audio files; originals are never touched            │
 └──────────────────────────────────────────────────────────────────────────────┘
 
@@ -154,7 +154,7 @@ Read it left to right: what is wrong, how big, whether it can be rebuilt (`fix` 
 green or red in a terminal), and which file. The last line tells you the exact command to run next,
 with your own path already filled in. Add `--out report.json` to keep the full details.
 
-![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png?v=0.9.2)
+![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png?v=0.9.3)
 
 `C:\media` in that screenshot is a placeholder folder, not a real machine; the paths are otherwise
 exactly what the tool printed.
@@ -347,6 +347,11 @@ worse than none, because `scan` skips this tool's own output names and would wal
 The damaged file itself is never touched, and `-o` refuses to name it, since writing a repair over
 the only copy of the original is the one way this could lose your file.
 
+stdout carries that verdict and nothing else: the `diagnosis:` line, the progress and `working:`
+lines all go to stderr, so `mediarescue fix clip.mkv --no-color | jq .ok` reads a real answer. A
+file that needs no repair answers in the same shape instead of printing an empty pipe —
+`"strategy": "none"` with a `reason`, which `--brief` writes as `none: nothing to repair …`.
+
 Leave out `--reference` and it looks for a healthy Matroska beside the damaged file (same folder,
 sub-folders, one level up), ranked by shared name words then by size, and it will try each
 candidate in turn — a reference can match the name and the size and still be a different encode,
@@ -399,7 +404,7 @@ host or on the site it came from. Instead of hunting for it yourself:
 mediarescue source "D:/broken-file/clip.mp4"
 ```
 
-![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png?v=0.9.2)
+![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png?v=0.9.3)
 
 That screenshot is the output of a real run (a 30-second Big Buck Bunny clip whose `moov`
 box was cut off); the window frame around it is drawn for the README, and the shell prompt — user

@@ -1,3 +1,4 @@
+import json
 import types
 from typing import ClassVar
 
@@ -266,3 +267,55 @@ def test_the_brief_line_names_the_decode_failure(tmp_path, monkeypatch, capsys):
 
     assert line.startswith("salvage-mkv: failed")
     assert "does not decode cleanly" in line
+
+
+def test_the_json_that_fix_prints_is_json(tmp_path, capsys, monkeypatch):
+    """stdout of `fix` is the verdict. A prose line in front of it is a broken contract:
+    `mediarescue fix clip.mp4 | jq .` used to die on line 1 of otherwise valid JSON."""
+    from mediarescue import cli
+
+    src = tmp_path / "broken.mp4"
+    src.write_bytes(b"not really a video")
+
+    class _Diagnosis:
+        severity = cli.Severity.CORRUPT_PAYLOAD
+        notes: ClassVar[list] = ["the head was overwritten"]
+        atoms: ClassVar[list] = []
+        gaps: ClassVar[list] = []
+
+    monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
+    monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)
+    monkeypatch.setattr(cli, "_repair", lambda src, out, args, d: {
+        "ok": False, "strategy": "salvage", "output": "",
+        "reason": "no complete frame to start from"})
+
+    assert main(["fix", str(src), "--no-color"]) == 1
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)      # raises if the diagnosis line is still on stdout
+    assert payload["ok"] is False
+    assert captured.err.startswith("diagnosis:")
+
+
+def test_a_healthy_file_still_answers_in_the_shape_the_mode_asked_for(tmp_path, capsys,
+                                                                     monkeypatch):
+    """Nothing to do is an answer, not silence: an empty stdout reads as a crash to a script."""
+    from mediarescue import cli
+
+    src = tmp_path / "fine.mp4"
+    src.write_bytes(b"whatever")
+
+    class _Diagnosis:
+        severity = cli.Severity.HEALTHY
+        notes: ClassVar[list] = ["boxes parse, index reachable"]
+
+    monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
+
+    assert main(["fix", str(src), "--no-color"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["strategy"] == "none"
+    assert payload["reason"].startswith("nothing to repair")
+
+    assert main(["fix", str(src), "--brief", "--no-color"]) == 0
+    line = capsys.readouterr().out.strip()
+    assert line.startswith("none: nothing to repair")

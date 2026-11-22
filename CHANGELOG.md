@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.3
+
+`fix` prints JSON by default, and that JSON was not JSON.
+
+- **The `diagnosis:` line goes to stderr.** `mediarescue fix clip.mkv` promises a verdict object on
+  stdout, but a prose line was printed in front of it, so `mediarescue fix clip.mkv | jq .ok` died on
+  line 1 of otherwise valid JSON. Prose — diagnosis, progress, `working: …` — now goes to stderr;
+  stdout carries the verdict and nothing else, which is also why `--brief` output is now exactly one
+  line per file. Nothing changes on a terminal, which merges both streams.
+- **A file that needs no repair answers instead of going quiet.** `fix` on a `healthy` file printed
+  a sentence to stdout and no JSON at all, so a script saw exit `0` and an empty pipe. It now prints
+  the same shape as every other run — `"strategy": "none"`, `"output": ""`, a `reason` — and
+  `--brief` writes `none: nothing to repair — this file already reads cleanly`.
+- `scan --json` was already clean; verified rather than assumed.
+- `pytest -q` is 888 passed and `ruff check .` is clean.
+
 ## 0.9.2
 
 What happens after a repair has been proven wrong. 0.9.1 stopped calling such a file `ok`; it was
