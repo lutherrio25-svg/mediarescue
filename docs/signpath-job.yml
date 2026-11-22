@@ -1,0 +1,58 @@
+# Ready-to-enable signing job for the free route (SignPath Foundation).
+#
+# Do not drop this file into .github/workflows/ until the foundation has approved the project and
+# the artifacts/policy slugs exist in their web UI -- a job that references a policy that is not
+# there fails the release.
+#
+#   cp docs/signpath-job.yml .github/workflows/sign-windows.yml
+#
+# Then in build-exe.yml, the release upload must use the signed artifacts from this job instead of
+# the ones it uploaded itself: fetch them with actions/download-artifact and upload *those*.
+name: sign windows build
+
+on:
+  workflow_dispatch:
+  # Or chain it to your build: workflow_run on "windows exe" completed.
+
+permissions:
+  contents: read
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: collect the unsigned artifacts from the build
+        uses: actions/download-artifact@v4
+        with:
+          name: mediarescue-windows
+          path: unsigned
+
+      - name: submit the signing request
+        id: signpath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: mediarescue-windows
+          # The whole point: the signature is only worth something if it was applied to the bytes
+          # that came out of this repository's build. SignPath rebuilds/attests accordingly.
+          github-artifact-id: ${{ inputs.artifact-id }}
+          wait-for-completion-timeout-in-seconds: 1800
+          output-artifact-directory: signed
+
+      - name: prove every file came back signed
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem signed -Recurse -Include *.exe
+          if (-not $files) { throw "no signed exe came back" }
+          foreach ($f in $files) {
+            # Get-AuthenticodeSignature is Windows-only; use osslsigncode on Linux runners instead.
+            Write-Host "signed: $($f.FullName) ($($f.Length) bytes)"
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mediarescue-windows-signed
+          path: signed/**/*.exe

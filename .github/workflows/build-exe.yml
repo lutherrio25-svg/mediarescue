@@ -14,6 +14,12 @@ permissions:
 jobs:
   setup-exe:
     runs-on: windows-latest
+    # Mapped here, not inside the signing steps, because a step's `if:` cannot read `secrets` and
+    # must not fail the release just because a certificate has not been bought yet.
+    env:
+      SIGNING_CERT_PFX_B64: ${{ secrets.SIGNING_CERT_PFX_B64 }}
+      SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+      SIGNING_CERT_THUMBPRINT: ${{ secrets.SIGNING_CERT_THUMBPRINT }}
     steps:
       - uses: actions/checkout@v4
 
@@ -58,6 +64,31 @@ jobs:
             throw "the windowed exe was not built"
           }
 
+      # SmartScreen says "Unknown publisher" for anything unsigned, and it says it for every
+      # download until the file carries a signature from a certificate Windows already trusts.
+      # This step is a no-op until a certificate is configured: the release then ships unsigned
+      # rather than not at all, and the log says so.
+      - name: sign the two exes
+        if: env.SIGNING_CERT_PFX_B64 != '' || env.SIGNING_CERT_THUMBPRINT != ''
+        shell: pwsh
+        run: |
+          if ($env:SIGNING_CERT_PFX_B64) {
+            $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGNING_CERT_PFX_B64))
+            ./packaging/sign.ps1 -Path dist-exe/mediarescue -PfxPath $pfx -PfxPassword $env:SIGNING_CERT_PASSWORD -Verify
+            Remove-Item $pfx -Force
+          }
+          else {
+            ./packaging/sign.ps1 -Path dist-exe/mediarescue -Thumbprint $env:SIGNING_CERT_THUMBPRINT -Verify
+          }
+
+      - name: note that the build is unsigned
+        if: env.SIGNING_CERT_PFX_B64 == '' && env.SIGNING_CERT_THUMBPRINT == ''
+        shell: pwsh
+        run: |
+          Write-Host "::warning::no signing certificate configured -- this release will show 'Unknown publisher'"
+          Write-Host "see docs/SIGNING.md; the free route is SignPath Foundation for open source"
+
       - name: build the installer
         shell: pwsh
         run: |
@@ -70,9 +101,26 @@ jobs:
             "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
           ) | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $iscc) { throw "ISCC.exe not found after installing Inno Setup" }
+          # The installer embeds the exes, but it is its own file with its own signature: an exe
+          # signed inside an unsigned setup still makes the setup warn on download, so the setup is
+          # signed in its own step below.
           & $iscc "/DAppVersion=$version" "packaging\mediarescue.iss"
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
           Get-ChildItem dist-setup | Format-Table Name, Length
+
+      - name: sign the installer
+        if: env.SIGNING_CERT_PFX_B64 != '' || env.SIGNING_CERT_THUMBPRINT != ''
+        shell: pwsh
+        run: |
+          if ($env:SIGNING_CERT_PFX_B64) {
+            $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGNING_CERT_PFX_B64))
+            ./packaging/sign.ps1 -Path dist-setup -PfxPath $pfx -PfxPassword $env:SIGNING_CERT_PASSWORD -Verify
+            Remove-Item $pfx -Force
+          }
+          else {
+            ./packaging/sign.ps1 -Path dist-setup -Thumbprint $env:SIGNING_CERT_THUMBPRINT -Verify
+          }
 
       - uses: actions/upload-artifact@v4
         with:

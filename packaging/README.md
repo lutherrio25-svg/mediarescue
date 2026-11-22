@@ -56,6 +56,11 @@ every start, which is a visible delay for someone who just double-clicked an ico
 
 ## The third thing that bit us
 
+- **An unsigned exe is a warning, not a bug.** SmartScreen says "Unknown publisher" for every
+  download that carries no trusted signature, and no amount of packaging changes that. `sign.ps1`
+  signs the two exes and the installer (timestamped, then verified), and `docs/SIGNING.md` lists the
+  routes with real prices — the free one is SignPath Foundation for open source.
+
 - **A layout bug fails exactly like a crash.** `ttk.Label(...).grid(row=8, ..., **pad)` passed
   `pady` twice, and Tk raised `duplicate keyword` at widget-build time: the window never appeared,
   and a screenshot script happily captured some *other* window and reported success. `tests/test_gui.py::test_the_window_can_actually_be_built`

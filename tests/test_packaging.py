@@ -39,6 +39,38 @@ def test_the_installer_opens_the_window_not_a_console():
     assert 'Name: "{autodesktop}\\{#AppName}"; Filename: "{app}\\{#AppExe}"' in text
 
 
+def test_the_release_signs_both_exes_and_the_installer_or_says_it_cannot():
+    """An unsigned exe inside a signed folder is not signed; the installer is a separate file."""
+    workflow = (ROOT / ".github" / "workflows" / "build-exe.yml").read_text(encoding="utf-8")
+    # Two steps (exes, then installer) times two routes (.pfx, store thumbprint).
+    assert workflow.count("-Path dist-exe/mediarescue ") == 2, \
+        "the two exes must go through sign.ps1 on both routes"
+    assert workflow.count("-Path dist-setup ") == 2, \
+        "the installer is a separate file with its own signature, on both routes"
+    assert "SIGNING_CERT_THUMBPRINT" in workflow, "a hardware/cloud key has to be usable too"
+    assert "no signing certificate configured" in workflow, \
+        "an unsigned release must say so in the log instead of failing silently"
+
+
+def test_the_signing_script_timestamps_and_verifies():
+    text = (ROOT / "packaging" / "sign.ps1").read_text(encoding="utf-8")
+    # Without a timestamp every signature dies with the certificate, and already-downloaded copies
+    # start warning again the day it expires.
+    assert "timestamp.digicert.com" in text
+    assert "Set-AuthenticodeSignature" in text, "a laptop without Windows SDK must still be able to sign"
+    assert "Get-AuthenticodeSignature" in text, "signing without checking the result is a claim"
+    assert "AllowUntrusted" in text, "a self-signed rehearsal must be possible without weakening releases"
+
+
+def test_the_free_signing_route_is_documented_and_inert():
+    doc = (ROOT / "docs" / "SIGNING.md").read_text(encoding="utf-8")
+    assert "SignPath Foundation" in doc and "free" in doc
+    job = (ROOT / "docs" / "signpath-job.yml").read_text(encoding="utf-8")
+    assert "signpath/github-action-submit-signing-request" in job
+    # A workflow file here would run on every push and fail on a policy that does not exist yet.
+    assert not (ROOT / ".github" / "workflows" / "sign-windows.yml").exists()
+
+
 def test_the_frozen_launcher_keeps_the_exit_code_and_the_utf8_streams():
     text = (ROOT / "packaging" / "entry.py").read_text(encoding="utf-8")
     assert "raise SystemExit(main())" in text, "the CLI's verdict is its exit code"
