@@ -166,6 +166,10 @@ def test_a_download_that_does_not_decode_gives_way_to_the_next_candidate(tmp_pat
 
     monkeypatch.setattr(cli, "_repair_with_reference", fake_repair)
     monkeypatch.setattr(cli, "_plays_without_errors", lambda path: len(tried) == 2)
+    # The probe is stubbed: this test is about which candidate wins the search, and the fake
+    # output above is 16 zero bytes. The probe gate itself is covered by tests/test_cli.py.
+    monkeypatch.setattr(cli, "probe",
+                        lambda p: {"ok": True, "duration": 1.0, "streams": ["h264"]})
     monkeypatch.setattr(cli, "_online_references", lambda path, args: iter([first, second]))
     monkeypatch.setattr("mediarescue.reference.find_reference", lambda path, **kw: None)
 

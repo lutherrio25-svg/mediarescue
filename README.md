@@ -294,7 +294,7 @@ severity                bytes  fix  file
 mkv-headless          590,643  yes  D:\broken\lecture.mkv
 healthy               908,681  yes  D:\broken\lecture-full.mkv
 
-2 scanned, 1 damaged, 1 repairable, 1 need a reference file
+2 scanned, 1 damaged: 0 repairable now, 1 need a reference file
 next: mediarescue fix "D:\broken" --out-dir "D:\broken\recovered"
 those need --reference: an intact file recorded the same way, see --help
 ```
@@ -337,6 +337,9 @@ diagnosis: mkv-headless — the EBML header is gone, but an intact Cluster start
   "source_untouched": true
 }
 ```
+
+`ok` in that object is the verdict, not "the strategy ran": an output file that `ffmpeg` cannot
+open or cannot decode comes back `false` with a `reason` naming the failure, and `fix` exits `1`.
 
 Leave out `--reference` and it looks for a healthy Matroska beside the damaged file (same folder,
 sub-folders, one level up), ranked by shared name words then by size, and it will try each

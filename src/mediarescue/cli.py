@@ -82,16 +82,23 @@ def cmd_scan(args) -> int:
     if not args.json:
         bad = [d for d in rows if d.severity != Severity.HEALTHY]
         repairable = [d for d in bad if d.recoverable]
+        # A file that needs a reference is also recoverable, so a plain list of three numbers
+        # reads as three damaged files when there is one. Say it as a breakdown instead.
+        needs_ref = [d for d in bad if d.needs_reference]
+        now = [d for d in bad if d.recoverable and not d.needs_reference]
         if not rows:
             print("\n" + paint("0 scanned: no video or audio files found here", "yellow"))
             return 0
         if not bad:
             print("\n" + paint(f"all {len(rows)} file(s) look fine; nothing to repair", "green"))
             return 0
-        print("\n" + paint(f"{len(rows)} scanned, {len(bad)} damaged, "
-                           f"{len(repairable)} repairable, "
-                           f"{sum(1 for d in bad if d.needs_reference)} need a reference file",
-                           "yellow" if repairable else "red"))
+        if needs_ref:
+            summary = (f"{len(rows)} scanned, {len(bad)} damaged: {len(now)} repairable now, "
+                       f"{len(needs_ref)} need a reference file")
+        else:
+            summary = (f"{len(rows)} scanned, {len(bad)} damaged, "
+                       f"{len(repairable)} repairable, 0 need a reference file")
+        print("\n" + paint(summary, "yellow" if repairable else "red"))
         # Say the next command out loud: the commonest stall is not knowing what to type next.
         first = Path(args.paths[0])
         where = first if first.is_dir() else first.parent
@@ -477,7 +484,24 @@ def _repair(src: Path, out: Path, args, d) -> dict:
             if not clean:
                 result["verify"]["first_error"] = first
         result["source_untouched"] = True
+        if not _result_ok(result):
+            # A strategy that wrote a file has not repaired anything unless that file opens and
+            # decodes. Saying ok here would let a script -- or anyone reading the JSON -- trust a
+            # file the same dict already marks as failed.
+            result["ok"] = False
+            result["reason"] = _gate_reason(result)
     return result
+
+
+def _gate_reason(result: dict) -> str:
+    """Why the file that was written is not usable, in terms the gates measured."""
+    verify = result.get("verify") or {}
+    if not verify.get("ok", True):
+        first = verify.get("first_error")
+        detail = f": {first}" if first else ""
+        return (f"the output does not decode cleanly "
+                f"({verify.get('decode_errors', 0)} error line(s)){detail}")
+    return "ffmpeg cannot open the file that was written"
 
 
 def _result_ok(result: dict) -> bool:

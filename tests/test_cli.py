@@ -139,3 +139,81 @@ def test_fix_and_scan_refuse_a_path_that_does_not_exist(tmp_path, capsys):
 def test_scan_of_an_empty_folder_is_not_an_error(tmp_path, capsys):
     assert main(["scan", str(tmp_path)]) == 0
     assert "0 scanned" in capsys.readouterr().out
+
+
+def test_scan_of_a_reference_only_damage_does_not_double_count(tmp_path, capsys, monkeypatch):
+    """One file that needs a reference is one damaged file, not three numbers to add up."""
+    from mediarescue import cli
+    from mediarescue.report import Severity
+
+    class _Diagnosis:
+        severity = Severity.MKV_HEADLESS
+        recoverable = True
+        needs_reference = True
+        size = 36
+        notes: ClassVar[list] = []
+        atoms: ClassVar[list] = []
+        gaps: ClassVar[list] = []
+
+    (tmp_path / "a.mkv").write_bytes(b"\x1a\x45\xdf\xa3" + b"\x00" * 32)
+    monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
+
+    assert main(["scan", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "1 damaged: 0 repairable now, 1 need a reference file" in out
+
+
+class _FixArgs:
+    """The attributes `_repair` reads, so it can be driven without a real command line."""
+
+    reference = None
+    fps = 25
+    no_verify = False
+    find_source = False
+    deep = False
+
+
+def _repair_with(tmp_path, monkeypatch, probe_info, decode):
+    from mediarescue import cli, ffmpeg
+
+    src = tmp_path / "broken.mp4"
+    src.write_bytes(b"not really a video")
+    monkeypatch.setattr(cli, "_resolve_strategy", lambda *a, **k: ("remux", None))
+    monkeypatch.setattr(cli, "remux", lambda *a, **k: (True, ""))
+    monkeypatch.setattr(cli, "probe", lambda p: probe_info)
+    monkeypatch.setattr(ffmpeg, "decode_check", lambda p: decode)
+    return cli._repair(src, tmp_path / "broken.repaired.mp4", _FixArgs(),
+                       cli.diagnose(src, hash_file=False))
+
+
+def test_a_written_file_that_does_not_decode_is_not_ok(tmp_path, monkeypatch):
+    """`ok` must not survive a failed decode gate: scripts read that field, not the exit code."""
+    result = _repair_with(tmp_path, monkeypatch,
+                          {"ok": True, "duration": 1.0, "streams": ["h264"]},
+                          (False, 7, "Cannot determine format of input 0:0 after EOF"))
+
+    assert result["ok"] is False
+    assert result["verify"]["decode_errors"] == 7
+    assert "does not decode cleanly" in result["reason"]
+
+
+def test_a_written_file_ffmpeg_cannot_open_is_not_ok(tmp_path, monkeypatch):
+    """A probe that cannot read the output is the same verdict as a decode that failed."""
+    result = _repair_with(tmp_path, monkeypatch,
+                          {"ok": False, "duration": 0.0, "streams": []},
+                          (True, 0, ""))
+
+    assert result["ok"] is False
+    assert "cannot open" in result["reason"]
+
+
+def test_the_brief_line_names_the_decode_failure(tmp_path, monkeypatch, capsys):
+    """The one-liner a script greps must say `failed`, never a bare filename."""
+    from mediarescue import cli
+
+    line = cli._brief_line({"ok": False, "strategy": "salvage-mkv",
+                            "output": str(tmp_path / "x.webm"),
+                            "reason": "the output does not decode cleanly (7 error line(s))"})
+
+    assert line.startswith("salvage-mkv: failed")
+    assert "does not decode cleanly" in line
