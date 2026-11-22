@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mediarescue"
-version = "0.12.0"
+version = "0.13.0"
 description = "Diagnose and repair damaged MP4, AVI, Matroska and MP3 files: decode-verified output, batch mode, originals never modified"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "lutherrio25-svg" }]
+authors = [{ name = "Star Corps bks" }]
 keywords = ["video-repair", "audio-repair", "mp4", "avi", "mp3", "mkv", "matroska", "webm",
             "ebml", "moov", "fragmented", "data-recovery", "ffmpeg", "av1", "h264", "salvage",
             "carve", "corrupt-files"]

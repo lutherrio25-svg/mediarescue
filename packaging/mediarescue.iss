@@ -6,10 +6,10 @@
 ; flash a console at someone who has never opened one -- while the command line build sits beside
 ; it for scripts and for anyone who prefers it.
 ;
-; Build: ISCC.exe /DAppVersion=0.12.0 packaging\mediarescue.iss   (from a dist-exe\mediarescue folder)
+; Build: ISCC.exe /DAppVersion=0.13.0 packaging\mediarescue.iss   (from a dist-exe\mediarescue folder)
 
 #define AppName "mediarescue"
-#define AppPublisher "lutherrio25-svg"
+#define AppPublisher "Star Corps bks"
 #define AppExe "mediarescue-window.exe"
 #define CliExe "mediarescue.exe"
 #ifndef AppVersion

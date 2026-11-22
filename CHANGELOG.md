@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.13.0
+
+The window now looks like the tool it is modelled on, and every band of it is dark.
+
+- **A dark title bar.** Windows draws the caption above a window in the desktop theme unless it is
+  told otherwise, so the window asks the desktop compositor for a dark frame and colours the caption
+  and its text to match. No white band above a dark toolbar any more.
+- **The menu row moved inside the window.** A tkinter menubar is a win32 menu: it ignores colours and
+  always arrives light. The row is now drawn in the client area, in the window's own palette; the
+  dropdowns it opens are still native.
+- **Summary rows say what actually happened.** `Output` shows the file that was written instead of
+  the next name it would pick, and the verdict reads `reference chosen` once a reference is filled
+  in rather than still asking for one. Typing a reference re-reads the verdict, debounced.
+- **`Save in` explains its empty state** (`empty = beside the original`), so a blank field is not a
+  question. `Duration`, `Video` and `Audio` stay em dashes when a file has no index to read them from
+  — that is the damage, not a failure of the window.
+- **Credit where it belongs:** the About box, the status bar, the exe metadata, the installer
+  publisher and the licence now name **Star Corps bks**.
+- Nothing about the command line changed: `fix`, `scan`, `verify`, `doctor` and the all-in-one menu
+  are untouched, and the window still calls the same code.
+
 ## 0.12.0
 
 A window, for the person who will never open a terminal.

@@ -8,6 +8,7 @@ import importlib
 import subprocess
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -180,10 +181,34 @@ def test_the_window_can_actually_be_built():
     try:
         app.root.update()
         assert app.root.title().startswith("mediarescue")
-        assert app.status.get() == "Ready."
+        assert app.status.get().startswith("Ready")
         assert str(app.go.cget("state")) == "normal"
+        assert str(app.stop_button.cget("state")) == "disabled"
+        # The tabs are the four the window promises: facts, why, options, log.
+        assert [app.tabs.tab(i, "text") for i in range(app.tabs.index("end"))] == [
+            "Summary", "Diagnosis", "Options", "Activity Log"]
+        assert app.log is not None and app.fact_vars["file"] is not None
+        # No native menu bar: Windows draws that one in its own colours and it comes out white.
+        assert not app.root.cget("menu")
+        assert app.menubar.cget("bg") == gui.MENU
     finally:
         app.root.destroy()
+
+
+def test_a_dropped_file_opens_even_with_the_gui_word_in_front(tmp_path, monkeypatch):
+    """The windowed exe is called as `mediarescue-window gui <file>`, so argv[0] is not the file."""
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"x")
+    seen = {}
+
+    class FakeApp:
+        def __init__(self, *args, **kwargs):
+            seen["prefill"] = kwargs.get("prefill")
+            self.root = types.SimpleNamespace(mainloop=lambda: None)
+
+    monkeypatch.setattr(gui, "App", FakeApp)
+    gui.main(["gui", str(src)])
+    assert seen["prefill"] == str(src)
 
 
 def test_importing_the_window_needs_no_display():
@@ -193,3 +218,113 @@ def test_importing_the_window_needs_no_display():
                          text=True)
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == "False"
+
+
+def test_the_options_on_screen_are_the_switches_the_command_line_takes(tmp_path, monkeypatch):
+    """Every box in the window has to be a flag that already exists, or the window lies."""
+    acceptable = set(cli.build_parser().parse_args(["fix", "x.mp4"]).__dict__)
+    assert {"strategy", "deep", "fps", "max_tries"} <= acceptable
+    choices = cli.build_parser().parse_args(["fix", "x.mp4"]).strategy
+    assert choices == "auto"
+    for _label, value in gui.STRATEGIES:
+        # `fix --strategy` has choices; anything the box offers must be one of them.
+        parser = cli.build_parser()
+        with pytest.raises(SystemExit):
+            parser.parse_args(["fix", "x.mp4", "--strategy", "definitely-not-a-strategy"])
+        assert value in ("auto", "remux", "graft", "flatten", "trim", "salvage", "carve",
+                         "salvage-mkv")
+
+
+def test_the_boxes_reach_the_repair(tmp_path, monkeypatch):
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"x")
+    out_dir = tmp_path / "fixed"
+    seen = {}
+
+    def fake_repair(path, out, args, diagnosis):
+        seen.update(strategy=args.strategy, fps=args.fps, max_tries=args.max_tries,
+                    out=Path(out))
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        Path(out).write_bytes(b"repaired")
+        return {"ok": True, "strategy": args.strategy, "output": str(out),
+                "verify": {"ok": True}, "probe": {"ok": True}}
+
+    _damaged(monkeypatch)
+    _ffmpeg_present(monkeypatch)
+    monkeypatch.setattr(cli, "_repair", fake_repair)
+
+    result = gui.repair_one(src, strategy="remux", fps=23.976, max_tries=3, output_dir=out_dir)
+
+    assert result["ok"] is True
+    assert seen["strategy"] == "remux" and seen["fps"] == 23.976 and seen["max_tries"] == 3
+    assert seen["out"] == out_dir / "clip.repaired.mp4", "Save in must decide where it lands"
+    assert result["output"] == str(out_dir / "clip.repaired.mp4")
+
+
+def test_the_save_in_folder_is_created_by_the_caller_and_keeps_its_own_numbering(tmp_path):
+    out_dir = tmp_path / "fixed"
+    out_dir.mkdir()
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"x")
+    (out_dir / "clip.repaired.mp4").write_bytes(b"first")
+
+    assert gui._output_path(src, out_dir) == out_dir / "clip.repaired-2.mp4"
+
+
+def test_inspect_says_what_is_wrong_and_what_it_would_write(tmp_path, monkeypatch):
+    src = tmp_path / "clip.mkv"
+    src.write_bytes(b"x" * 2048)
+    diagnose_module = importlib.import_module("mediarescue.diagnose")
+    monkeypatch.setattr(
+        diagnose_module, "diagnose",
+        lambda path, **kwargs: types.SimpleNamespace(
+            severity=cli.Severity.MKV_HEADLESS, notes=["the EBML header is gone"],
+            size=2048, recoverable=True, needs_reference=True))
+
+    facts = gui.inspect(src)
+
+    assert facts["name"] == "clip.mkv"
+    assert facts["size_text"] == "2.0 kB"
+    assert facts["kind"] == "MKV"
+    assert facts["severity"] == "mkv-headless"
+    assert facts["needs_reference"] is True
+    assert facts["notes"] == ["the EBML header is gone"]
+    assert facts["would_write"] == "clip.repaired.mkv"
+    assert facts["tone"] == gui.WARN
+
+
+def test_inspect_survives_a_file_it_cannot_read(tmp_path):
+    facts = gui.inspect(tmp_path / "gone.mp4")
+
+    assert facts["error"] == ""            # missing file is a fact, not an exception
+    assert facts["size_text"] == "—"
+
+
+def test_the_progress_callback_counts_every_file(tmp_path, monkeypatch):
+    for name in ("a.mp4", "b.mp4", "c.mp4"):
+        (tmp_path / name).write_bytes(b"x")
+    _damaged(monkeypatch, cli.Severity.HEALTHY)
+    seen = []
+
+    gui.repair_target(tmp_path, progress=lambda done, total: seen.append((done, total)))
+
+    assert seen == [(0, 3), (1, 3), (1, 3), (2, 3), (2, 3), (3, 3)]
+
+
+def test_a_finished_run_remembers_which_files_it_wrote(tmp_path, monkeypatch):
+    src = tmp_path / "clip.mp4"
+    src.write_bytes(b"x")
+
+    def fake_repair(path, out, args, diagnosis):
+        Path(out).write_bytes(b"repaired")
+        return {"ok": True, "strategy": "remux", "output": str(out),
+                "verify": {"ok": True}, "probe": {"ok": True}}
+
+    _damaged(monkeypatch)
+    _ffmpeg_present(monkeypatch)
+    monkeypatch.setattr(cli, "_repair", fake_repair)
+
+    stats = gui.repair_target(src)
+
+    assert stats["repaired"] == 1
+    assert stats["written"] == [str(tmp_path / "clip.repaired.mp4")]

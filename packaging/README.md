@@ -35,7 +35,7 @@ env PATH="/c/Windows/system32" ./dist-exe/mediarescue/mediarescue.exe doctor
 ./dist-exe/mediarescue/mediarescue-window.exe
 
 # 5. installer (Inno Setup 6)
-"/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DAppVersion=0.12.0" packaging/mediarescue.iss
+"/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DAppVersion=0.13.0" packaging/mediarescue.iss
 ```
 
 CI does exactly this on `windows-latest` for every `v*` tag (`.github/workflows/build-exe.yml`) and
