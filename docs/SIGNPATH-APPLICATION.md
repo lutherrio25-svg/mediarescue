@@ -67,6 +67,32 @@ artefacts come out of the same pipeline with no code change. English-language UI
 maintained continuously since November 2026.
 ```
 
+## What actually went into the form
+
+These two are the submitted strings, kept here so a follow-up question from the reviewers can be
+answered with the same words that were sent.
+
+**Description** (`A short paragraph describing your project and its purpose. Avoid listing
+version-specific features or dependencies.`)
+
+```
+mediarescue is a command-line tool for damaged video and audio: the files a player refuses to open because the index is gone, the tail was cut off, or the header is corrupt. It reads the broken file, works out what is actually wrong, and writes a separate repaired copy -- keeping what is intact, taking a working header from a healthy reference file when one exists, and rebuilding the index from the media payload when nothing else is left. The original is never modified, and every repair is proven by decoding the entire output; a copy that fails that check is thrown away instead of being offered as a fix. It exists for the case where the only other option is a full re-encode that still loses the recording.
+```
+
+**Reputation** (`Provide links or information showing that your project is widely used or trusted.`)
+
+```
+mediarescue is a young project -- first commit 2026-11-16 -- so it has no press coverage, package adoption or download figures yet. The evidence that can be checked today is in the repository and its releases:
+- 22 tagged releases, v0.2.0 to v0.13.0, each built and smoke-tested by GitHub Actions: https://github.com/lutherrio25-svg/mediarescue/releases
+- the test suite (924 tests) runs green on every push: https://github.com/lutherrio25-svg/mediarescue/actions
+- every release asset is published with a sha256 digest, and each release is built from the tagged source by CI, not by hand
+- the public installer has been installed, used to repair a damaged file, and verified end to end on Windows 11
+- the documentation states which damage classes are repairable and which are not: https://github.com/lutherrio25-svg/mediarescue#readme
+```
+
+The rule both follow: Description sells the *problem and the method*, never the feature list;
+Reputation never argues, it points at things a reviewer can open in a browser and check.
+
 ## Checklist before you submit (all verified in this repository today)
 
 - [x] Public repository — <https://github.com/lutherrio25-svg/mediarescue>
