@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.9.1
+
+Two places where the tool said more than it had measured. Both surfaced by auditing 0.9.0 against
+a head-cut fixture that looks like a real recording — 30 seconds with half-second clusters —
+instead of a 6-second clip holding two.
+
+- **`fix` no longer reports `"ok": true` for an output that does not decode.** A WebM whose
+  surviving cluster carried no keyframe was transplanted into a file `ffmpeg` could not decode a
+  single frame of, and the JSON said `ok: true` while the same object said
+  `"verify": {"ok": false, "decode_errors": 7}`. The exit code was already 1, but `ok` is what a
+  script reads. The probe and decode gates now decide `ok` itself, with a `reason` naming the
+  failure, so `--brief` prints `salvage-mkv: failed — the output does not decode cleanly (7 error
+  line(s))` instead of naming a file that does not play.
+- **`scan` counts a reference-needing file once.** `mkv-headless` is recoverable *and* needs a
+  reference, so one damaged file printed as `1 damaged, 1 repairable, 1 need a reference file` —
+  three numbers that read as three files. When such a class is present the summary is a breakdown
+  (`1 damaged: 0 repairable now, 1 need a reference file`); the wording for scans with no
+  reference-needing file is unchanged, so existing screenshots stay accurate.
+- The Matroska paths themselves hold up on that fixture: `.mkv` (H.264+AAC), `.webm` (VP9+Opus)
+  and `.mka` (audio only) each recover every intact second — 19.4 to 19.5 s of the 19.5 s that
+  survived — with 0 decode errors and the damaged file's checksum unchanged.
+- `pytest -q` is 883 passed and `ruff check .` is clean.
+
 ## 0.9.0
 
 Matroska files that lost their head used to be a dead end: `ffmpeg` refuses them outright, the

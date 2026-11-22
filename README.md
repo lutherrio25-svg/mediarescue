@@ -75,7 +75,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.9.0 — doctor
+mediarescue 0.9.1 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -105,7 +105,7 @@ No flags to remember: run `mediarescue` with no arguments in a terminal and you 
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ mediarescue 0.9.0                                                            │
+│ mediarescue 0.9.1                                                            │
 │ repair damaged video and audio files; originals are never touched            │
 └──────────────────────────────────────────────────────────────────────────────┘
 
