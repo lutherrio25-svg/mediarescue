@@ -15,7 +15,7 @@ heads, fragmented MP4s that lost their init segment, downloads that never finish
 is gone and no intact copy exists anywhere, it can search the web for the original upload and
 repair with that.
 
-![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png?v=0.10.0)
+![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png?v=0.11.0)
 
 The screenshot is a real session: `scan` on a folder holding one healthy MP4, one healthy MP3, one
 AVI whose `idx1` points at the wrong chunks, and one AVI whose index was cut off. Every line below a
@@ -23,6 +23,14 @@ prompt is the CLI's own output, unedited; the window frame is drawn for the READ
 a placeholder (`PS C:\media>` is not a real machine).
 
 ## Install
+
+**Windows, for people who do not have Python and do not want any:** download
+`mediarescue-<version>-setup.exe` from the [releases page](https://github.com/lutherrio25-svg/mediarescue/releases/latest),
+double-click it, and start **mediarescue** from the Start Menu. The installer is per-user (no admin
+prompt), it carries ffmpeg inside it, and it never touches your `PATH`. The exe and the installer
+are built by CI for every release, so they cannot drift from the code.
+
+If you would rather have the command line and already use Python:
 
 ```bash
 pip install "git+https://github.com/lutherrio25-svg/mediarescue.git"
@@ -75,7 +83,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.10.0 — doctor
+mediarescue 0.11.0 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -101,11 +109,11 @@ check to test a specific folder.
 
 No flags to remember: run `mediarescue` with no arguments in a terminal and you get a menu.
 
-![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png?v=0.10.0)
+![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png?v=0.11.0)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ mediarescue 0.10.0                                                           │
+│ mediarescue 0.11.0                                                           │
 │ repair damaged video and audio files; originals are never touched            │
 └──────────────────────────────────────────────────────────────────────────────┘
 
@@ -154,7 +162,7 @@ Read it left to right: what is wrong, how big, whether it can be rebuilt (`fix` 
 green or red in a terminal), and which file. The last line tells you the exact command to run next,
 with your own path already filled in. Add `--out report.json` to keep the full details.
 
-![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png?v=0.10.0)
+![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png?v=0.11.0)
 
 `C:\media` in that screenshot is a placeholder folder, not a real machine; the paths are otherwise
 exactly what the tool printed.
@@ -166,7 +174,13 @@ inside MP3/AVI, or a junk payload hiding behind a perfect index or behind intact
 ```bash
 mediarescue scan "D:/broken-file" --deep
 mediarescue scan "D:/broken-file" --deep --deep-seconds 30   # quick pass, opening 30s each
+mediarescue scan "D:/broken-file" --deep --jobs 4 --deep-seconds 30   # the same, four at a time
 ```
+
+`--jobs N` also works on a plain `scan`, but a header read is cheap enough that it hardly shows
+(25 files: 0.27s → 0.20s here). It earns its keep with `--deep`, where each file is a full decode:
+six 90-second files went **3.83s → 2.13s** at `--jobs 4` on this 8-core machine. The report keeps
+folder order either way.
 
 **2. Repair the damaged file.** Leave the strategy on `auto` — it is chosen from the scan
 result:
@@ -247,7 +261,10 @@ clean       12.08s  clip.mp4  every frame decoded
 file repaired by anything — this tool, another program, a friend's laptop — through the same gate.
 Exit code `0` means every frame decoded, `1` means decode errors (it prints how many and the first
 one), `2` a missing file, `3` no ffmpeg. `--seconds 30` checks only the opening half-minute,
-`--json` gives the same result as data. The raw command behind it is:
+`--json` gives the same result as data. It takes folders as well as files — the natural question
+after a batch repair is "did all of these actually come out?" — and `--jobs N` checks several at
+once, in the order you listed them: six 90-second files went **7.73s → 5.30s** at `--jobs 4`. The
+raw command behind it is:
 
 ```bash
 ffmpeg -v error -i "D:/fixed/clip.mp4" -f null -
@@ -417,7 +434,7 @@ host or on the site it came from. Instead of hunting for it yourself:
 mediarescue source "D:/broken-file/clip.mp4"
 ```
 
-![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png?v=0.10.0)
+![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png?v=0.11.0)
 
 That screenshot is the output of a real run (a 30-second Big Buck Bunny clip whose `moov`
 box was cut off); the window frame around it is drawn for the README, and the shell prompt — user

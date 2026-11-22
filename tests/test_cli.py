@@ -1,4 +1,5 @@
 import json
+import pathlib
 import threading
 import time
 import types
@@ -417,3 +418,89 @@ def test_a_batch_creates_the_out_dir_it_was_given(tmp_path, capsys, monkeypatch)
     assert sorted(p.name for p in fresh.glob("*.repaired.mp4")) == ["a.repaired.mp4",
                                                                   "b.repaired.mp4"]
     assert "FAILED" not in capsys.readouterr().out
+
+
+def _overlap_probe(lock, live, peak):
+    """Context-manager-ish helper: record how many callers are inside at once."""
+    class _Probe:
+        def __enter__(self):
+            with lock:
+                live.append(1)
+                peak.append(len(live))
+
+        def __exit__(self, *exc):
+            with lock:
+                live.pop()
+            return False
+    return _Probe()
+
+
+def test_scan_jobs_classifies_at_once_and_keeps_the_order(tmp_path, capsys, monkeypatch):
+    from mediarescue import cli
+
+    names = ["a.mp4", "b.mp4", "c.mp4", "d.mp4"]
+    for name in names:
+        (tmp_path / name).write_bytes(b"x")
+
+    lock = threading.Lock()
+    live: list[int] = []
+    peak: list[int] = []
+
+    def fake_diagnose(path, **kwargs):
+        with _overlap_probe(lock, live, peak):
+            time.sleep(0.15)
+        return types.SimpleNamespace(severity=cli.Severity.HEALTHY, size=1, recoverable=False,
+                                     needs_reference=False,
+                                     to_dict=lambda: {"path": str(path)})
+
+    monkeypatch.setattr(cli, "diagnose", fake_diagnose)
+
+    started = time.monotonic()
+    assert main(["scan", str(tmp_path), "--jobs", "4", "--no-color"]) == 0
+    elapsed = time.monotonic() - started
+
+    assert max(peak) >= 2, f"nothing overlapped: {peak}"
+    assert elapsed < 0.55, f"4 x 0.15s took {elapsed:.2f}s"
+    out = capsys.readouterr().out
+    assert [name for name in names if name in out] == names
+
+
+def test_verify_takes_a_folder_and_checks_at_once(tmp_path, capsys, monkeypatch):
+    from mediarescue import cli, ffmpeg
+
+    names = ["a.mp4", "b.mp4", "c.mp4"]
+    for name in names:
+        (tmp_path / name).write_bytes(b"x")
+
+    lock = threading.Lock()
+    live: list[int] = []
+    peak: list[int] = []
+
+    def fake_decode(path, seconds=None):
+        with _overlap_probe(lock, live, peak):
+            time.sleep(0.15)
+        return True, 0, ""
+
+    monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)
+    monkeypatch.setattr(cli, "probe", lambda p: {"ok": True, "duration": 1.5,
+                                                 "streams": ["h264"]})
+    monkeypatch.setattr(ffmpeg, "decode_check", fake_decode)
+
+    started = time.monotonic()
+    assert main(["verify", str(tmp_path), "--jobs", "3", "--json"]) == 0
+    elapsed = time.monotonic() - started
+
+    assert max(peak) >= 2, f"nothing overlapped: {peak}"
+    assert elapsed < 0.42, f"3 x 0.15s took {elapsed:.2f}s"
+    rows = json.loads(capsys.readouterr().out)
+    assert [pathlib.Path(row["path"]).name for row in rows] == names
+    assert all(row["ok"] and row["duration"] == 1.5 for row in rows)
+
+
+def test_verify_says_so_when_a_folder_holds_no_media(tmp_path, capsys, monkeypatch):
+    from mediarescue import cli
+
+    monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)
+    (tmp_path / "notes.txt").write_text("nothing to decode", encoding="utf-8")
+    assert main(["verify", str(tmp_path)]) == 2
+    assert "no video or audio files found" in capsys.readouterr().err

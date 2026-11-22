@@ -90,14 +90,30 @@ def cmd_scan(args) -> int:
     paint = ui.colour_for(ui.enabled(override=False if args.no_color else None))
     if not args.json:
         print(paint(f"{'severity':<16} {'bytes':>12}  {'fix':<3}  file", "dim"))
-    for f in iter_media(args.paths):
-        d = diagnose(f, hash_file=args.hash, deep=args.deep, deep_seconds=args.deep_seconds)
+    files = list(iter_media(args.paths))
+    jobs = _effective_jobs(args)
+
+    def look(f: Path):
+        return diagnose(f, hash_file=args.hash, deep=args.deep, deep_seconds=args.deep_seconds)
+
+    def emit(f: Path, d) -> None:
         rows.append(d)
         if not args.json:
             label = paint(f"{d.severity.value:<16}", SEVERITY_COLOUR.get(d.severity, ""))
             fixable = paint(f"{'yes' if d.recoverable else 'no ':<3}",
                             "green" if d.recoverable else "red")
             print(f"{label} {d.size:>12,}  {fixable}  {f}")
+
+    if jobs > 1 and len(files) > 1:
+        # map() keeps file order while running several diagnoses at once: a scan of a folder is
+        # mostly waiting on reads, which is exactly what threads are good at.
+        print(f"scanning {len(files)} files, {jobs} at a time", file=sys.stderr)
+        with futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+            for f, d in zip(files, pool.map(look, files), strict=False):
+                emit(f, d)
+    else:
+        for f in files:
+            emit(f, look(f))
     if args.json:
         # printable(): a lone surrogate survives as text but makes the JSON invalid.
         print(ui.printable(json.dumps([d.to_dict() for d in rows], indent=2)))
@@ -165,14 +181,29 @@ def cmd_verify(args) -> int:
     if not have_ffmpeg():
         print("ffmpeg is not on PATH: the decode check needs it", file=sys.stderr)
         return 3
+    # A folder is the natural input after a batch repair: "did all of those actually come out?"
+    files = list(iter_media([str(t) for t in targets]))
+    if not files:
+        print("no video or audio files found there", file=sys.stderr)
+        return 2
     from .ffmpeg import decode_check
-    rows = []
-    for target in targets:
+
+    def check(target: Path) -> dict:
         info = probe(target)
         clean, lines, first = decode_check(target, args.seconds)
-        rows.append({"path": str(target), "ok": bool(info.get("ok")) and clean,
-                     "decode_errors": lines, "first_error": first,
-                     "duration": info.get("duration", 0), "streams": info.get("streams", [])})
+        return {"path": str(target), "ok": bool(info.get("ok")) and clean,
+                "decode_errors": lines, "first_error": first,
+                "duration": info.get("duration", 0), "streams": info.get("streams", [])}
+
+    jobs = _effective_jobs(args)
+    if jobs > 1 and len(files) > 1:
+        # Each check is an ffmpeg subprocess, so threads (not processes) are the right tool and
+        # map() keeps the report in the order the caller gave the files.
+        print(f"verifying {len(files)} files, {jobs} at a time", file=sys.stderr)
+        with futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+            rows = list(pool.map(check, files))
+    else:
+        rows = [check(target) for target in files]
     paint = ui.colour_for(ui.enabled(override=False if args.no_color else None))
     if args.json:
         print(ui.printable(json.dumps(rows, indent=2)))
@@ -886,6 +917,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--deep-seconds", type=float,
                    help="with --deep: stop decoding after N seconds per file")
     s.add_argument("--no-color", action="store_true", help="never emit ANSI colour")
+    s.add_argument("-j", "--jobs", type=_positive_int, default=1,
+                   help="classify this many files at once (default 1)")
     s.set_defaults(func=cmd_scan)
 
     d = sub.add_parser("doctor", help="check that this machine can run a repair")
@@ -964,10 +997,12 @@ def main(argv: list[str] | None = None) -> int:
     so.set_defaults(func=cmd_source)
 
     v = sub.add_parser("verify", help="decode a file in full and report what did not come out")
-    v.add_argument("file", nargs="+", help="one or more media files")
+    v.add_argument("file", nargs="+", help="one or more media files, or folders")
     v.add_argument("--seconds", type=float, help="stop after N seconds instead of the whole file")
     v.add_argument("--json", action="store_true", help="machine-readable result")
     v.add_argument("--no-color", action="store_true", help="never emit ANSI colour")
+    v.add_argument("-j", "--jobs", type=_positive_int, default=1,
+                   help="decode this many files at once (default 1)")
     v.set_defaults(func=cmd_verify)
 
     m = sub.add_parser("menu", help="interactive all-in-one menu (also opens when run with no arguments)")

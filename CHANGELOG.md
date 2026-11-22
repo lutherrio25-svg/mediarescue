@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.11.0
+
+`--jobs` reaches the other two commands that walk a folder.
+
+- **`verify --jobs N`**, and `verify` now takes folders: after a batch repair the natural question
+  is "did all of these actually come out?", and the answer was one file at a time. The report stays
+  in the order you listed the files. Measured: six 90-second files **7.73s → 5.30s** at `--jobs 4`.
+- **`scan --jobs N`** classifies several files at once and still prints them in folder order. It
+  earns its keep with `--deep` (six 90s files **3.83s → 2.13s** at `--jobs 4`); on a header-only
+  scan the work is cheap enough that it barely shows (25 files 0.27s → 0.20s, reported as measured
+  rather than as a promise).
+- `verify <folder>` with nothing decodable in it says so and exits `2`, instead of printing an
+  empty report.
+- Default is still one at a time in both commands; `--jobs 0`, `-2` and `two` stay errors.
+- **Windows build, for people with no Python:** `packaging/mediarescue.spec` (PyInstaller, one
+  folder) plus `packaging/mediarescue.iss` (Inno Setup) produce a single per-user
+  `mediarescue-<version>-setup.exe` with ffmpeg and ffprobe inside it, a Start Menu entry and an
+  uninstaller. CI builds it on `windows-latest` for every `v*` tag and attaches it to the release.
+  The exe finds its own ffmpeg (`ffmpeg._bundled`), so nothing has to be on `PATH`; `MEDIARESCUE_FFMPEG`
+  still overrides, and a source checkout behaves exactly as before.
+- `packaging/entry.py` launches the frozen build: absolute import (PyInstaller's script context has
+  no parent package), UTF-8 stdout/stderr (the frozen interpreter otherwise printed the em dash as
+  `0x97` where the wheel printed UTF-8), and the CLI's return code is the process exit code.
+- `tests/test_packaging.py` fails if `packaging/version_info.txt` drifts from `__version__`, if the
+  installer stops taking its version from the build, or if the launcher forgets the exit code or UTF-8.
+- `pytest -q` is 898 passed and `ruff check .` is clean.
+
 ## 0.10.0
 
 A folder is no longer one file at a time.

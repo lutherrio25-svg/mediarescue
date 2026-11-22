@@ -4,10 +4,33 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
-FFMPEG = os.environ.get("MEDIARESCUE_FFMPEG", "ffmpeg")
-FFPROBE = os.environ.get("MEDIARESCUE_FFPROBE", "ffprobe")
+
+def _bundled(name: str) -> str | None:
+    """A frozen build carries ffmpeg next to itself.
+
+    The point of shipping an .exe is that the person running it never installed ffmpeg, so a
+    bundled copy wins over PATH -- but MEDIARESCUE_FFMPEG still overrides everything, and a source
+    checkout (no sys.frozen) keeps looking on PATH exactly as before.
+    """
+    if not getattr(sys, "frozen", False):
+        return None
+    roots = [Path(sys.executable).resolve().parent]
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        roots.append(Path(meipass))
+    for root in roots:
+        for candidate in (root / f"{name}.exe", root / name,
+                          root / "bin" / f"{name}.exe", root / "ffmpeg" / f"{name}.exe"):
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
+FFMPEG = os.environ.get("MEDIARESCUE_FFMPEG") or _bundled("ffmpeg") or "ffmpeg"
+FFPROBE = os.environ.get("MEDIARESCUE_FFPROBE") or _bundled("ffprobe") or "ffprobe"
 
 
 def have_ffmpeg() -> bool:

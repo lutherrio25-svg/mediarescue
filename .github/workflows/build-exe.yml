@@ -1,0 +1,88 @@
+name: windows exe
+
+# Builds the thing a non-technical person actually wants: one setup.exe that installs the program
+# with ffmpeg inside it, so nobody needs Python, pip, or a terminal.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  setup-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller .
+          pip show mediarescue | Select-String -Pattern "^Version"
+
+      - name: fetch ffmpeg (static, LGPL-ish gyan essentials)
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "ffmpeg.zip"
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath (Join-Path $env:RUNNER_TEMP "ffmpeg")
+          $bin = Get-ChildItem (Join-Path $env:RUNNER_TEMP "ffmpeg") -Directory |
+                 Select-Object -First 1 | ForEach-Object { Join-Path $_.FullName "bin" }
+          "MEDIARESCUE_BUNDLE_FFMPEG=$bin\ffmpeg.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "MEDIARESCUE_BUNDLE_FFPROBE=$bin\ffprobe.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+          & "$bin\ffmpeg.exe" -version | Select-Object -First 1
+
+      - name: build the folder
+        run: pyinstaller --noconfirm --clean --workpath build-exe --distpath dist-exe packaging/mediarescue.spec
+
+      - name: smoke test without ffmpeg on PATH
+        shell: pwsh
+        run: |
+          $exe = "dist-exe\mediarescue\mediarescue.exe"
+          $env:PATH = "$env:SystemRoot\system32"
+          & $exe --version
+          $version = (& $exe --version).Trim()
+          if ($version -notmatch "^mediarescue \d+\.\d+\.\d+$") { throw "unexpected --version: $version" }
+          & $exe doctor --no-color
+          if ($LASTEXITCODE -ne 0) { throw "doctor said the machine cannot repair files" }
+
+      - name: build the installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $version = (& "dist-exe\mediarescue\mediarescue.exe" --version).Trim().Split(" ")[1]
+          # Inno installs per-machine on most images and per-user on some; both are fine.
+          $iscc = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe",
+            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe not found after installing Inno Setup" }
+          & $iscc "/DAppVersion=$version" "packaging\mediarescue.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+          Get-ChildItem dist-setup | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mediarescue-windows
+          path: |
+            dist-setup/*.exe
+            dist-exe/mediarescue/mediarescue.exe
+
+      - name: attach the installer to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          gh release view $tag | Out-Null
+          if ($LASTEXITCODE -ne 0) { gh release create $tag --title $tag --generate-notes }
+          gh release upload $tag (Get-ChildItem dist-setup\*.exe).FullName --clobber
