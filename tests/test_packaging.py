@@ -67,8 +67,10 @@ WINGET = ROOT / "packaging" / "winget" / "manifests" / "s" / "StarCorpsBks" / "M
 
 def _field(text: str, name: str) -> str:
     for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith(f"{name}:"):  # Installers is a list, so the key arrives indented
+        # Installers and AppsAndFeaturesEntries are lists, so keys arrive indented and sometimes
+        # behind a dash.
+        stripped = line.strip().lstrip("- ")
+        if stripped.startswith(f"{name}:"):
             return stripped.split(":", 1)[1].strip().strip('"')
     raise AssertionError(f"{name} is missing from the manifest")
 
@@ -105,6 +107,11 @@ def test_the_winget_manifest_describes_the_installer_we_publish():
     iss = (ROOT / "packaging" / "mediarescue.iss").read_text(encoding="utf-8")
     assert "PrivilegesRequired=lowest" in iss
     assert _field(inst, "Scope") == "user"
+
+    # Inno names the Programs-and-Features entry from AppVerName, so what winget must look for is
+    # "mediarescue 0.13.0" and not the bare AppName. Miss it and winget installs a second copy
+    # beside the one already on disk instead of upgrading it.
+    assert _field(inst, "DisplayName") == f"mediarescue {__version__}"
 
 
 def test_the_free_signing_route_is_documented_and_inert():
