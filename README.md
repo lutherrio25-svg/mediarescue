@@ -30,6 +30,10 @@ double-click it, and start **mediarescue** from the Start Menu. The installer is
 prompt), it carries ffmpeg inside it, and it never touches your `PATH`. The exe and the installer
 are built by CI for every release, so they cannot drift from the code.
 
+The installer carries an ffmpeg build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) so nothing
+else has to be installed. ffmpeg is GPL-licensed and runs as a separate program — mediarescue stays
+MIT — and its source is linked on that page; nothing in this repository is GPL-derived.
+
 If you would rather have the command line and already use Python:
 
 ```bash
