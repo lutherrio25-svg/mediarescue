@@ -15,7 +15,7 @@ heads, fragmented MP4s that lost their init segment, downloads that never finish
 is gone and no intact copy exists anywhere, it can search the web for the original upload and
 repair with that.
 
-![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png?v=0.9.3)
+![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png?v=0.10.0)
 
 The screenshot is a real session: `scan` on a folder holding one healthy MP4, one healthy MP3, one
 AVI whose `idx1` points at the wrong chunks, and one AVI whose index was cut off. Every line below a
@@ -75,7 +75,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.9.3 — doctor
+mediarescue 0.10.0 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -101,22 +101,22 @@ check to test a specific folder.
 
 No flags to remember: run `mediarescue` with no arguments in a terminal and you get a menu.
 
-![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png?v=0.9.3)
+![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png?v=0.10.0)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ mediarescue 0.9.3                                                            │
+│ mediarescue 0.10.0                                                           │
 │ repair damaged video and audio files; originals are never touched            │
 └──────────────────────────────────────────────────────────────────────────────┘
 
-     1  Check this machine can repair files    ffmpeg, ffprobe, disk space
-     2  Look at a file or folder               what's wrong, no changes
-  ▸  3  Repair one file                        leaves the original alone
-     4  Repair every damaged file in a folder  skips the healthy ones
-     5  Show the damage classes                one line per class
-     6  Find a file's original online          searches the web first
+     1  Check this machine can repair files    ffmpeg, ffprobe, disk space  
+     2  Look at a file or folder               what's wrong, no changes     
+  ▸  3  Repair one file                        leaves the original alone        
+     4  Repair every damaged file in a folder  skips the healthy ones       
+     5  Show the damage classes                one line per class           
+     6  Find a file's original online          searches the web first       
      7  Check a file really decodes            every frame, not just headers
-     0  Quit                                   close the menu
+     0  Quit                                   close the menu               
 
   ↑/↓ move  ·  Enter choose  ·  0 quits
 ```
@@ -154,7 +154,7 @@ Read it left to right: what is wrong, how big, whether it can be rebuilt (`fix` 
 green or red in a terminal), and which file. The last line tells you the exact command to run next,
 with your own path already filled in. Add `--out report.json` to keep the full details.
 
-![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png?v=0.9.3)
+![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png?v=0.10.0)
 
 `C:\media` in that screenshot is a placeholder folder, not a real machine; the paths are otherwise
 exactly what the tool printed.
@@ -218,6 +218,19 @@ mediarescue fix "D:/broken-file" --out-dir "D:/fixed"
 
 4 files: 1 repaired, 1 failed, 2 skipped
 ```
+
+**More than one at a time.** `--jobs N` (`-j N`) repairs N files at once, and the table still comes
+out in folder order whatever order they finish in:
+
+```bash
+mediarescue fix "D:/broken-file" --out-dir "D:/fixed" --jobs 4
+```
+
+Measured here, not promised: eight damaged 30-second MKVs went from **9.0s to 2.6s** with
+`--jobs 6` on an 8-core machine. Four files of 90 seconds barely moved (7.0s → 6.4s), because
+ffmpeg already feeds every core from one file — so the honest advice is 2–4 for a folder of
+ordinary files, 1 on a machine you are still using, and more only when each file is small. `--jobs`
+steps aside for `--find-source`, which keeps one search cache and one "candidate in use" slot.
 
 **3. Prove the repair.** `ffprobe` reads headers, so a file can look perfect and still be noise
 inside. A full decode is the real test — **silence means it worked**:
@@ -404,7 +417,7 @@ host or on the site it came from. Instead of hunting for it yourself:
 mediarescue source "D:/broken-file/clip.mp4"
 ```
 
-![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png?v=0.9.3)
+![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png?v=0.10.0)
 
 That screenshot is the output of a real run (a 30-second Big Buck Bunny clip whose `moov`
 box was cut off); the window frame around it is drawn for the README, and the shell prompt — user

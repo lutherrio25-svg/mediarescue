@@ -3,12 +3,38 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from concurrent import futures
 from pathlib import Path
+from typing import Any
 
 from . import __version__, fetch, ui
 from .diagnose import MEDIA_SUFFIXES, diagnose
 from .ffmpeg import have_ffmpeg, probe, remux
 from .report import Severity
+
+
+def _positive_int(text: str) -> int:
+    """`--jobs 0` and `--jobs two` are typos, not instructions to do something surprising."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be 1 or more")
+    return value
+
+
+def _effective_jobs(args) -> int:
+    """How many repairs may run at once. Default 1 keeps every machine and log predictable."""
+    jobs = max(1, int(getattr(args, "jobs", 1) or 1))
+    if jobs > 1 and getattr(args, "find_source", False):
+        # The search keeps one shared cache and one "candidate I am using" slot on args; running
+        # several at once would interleave downloads and notes to no benefit, since the search --
+        # not the repair -- is what takes the time there.
+        print("--jobs is ignored with --find-source: the search is shared state",
+              file=sys.stderr)
+        return 1
+    return jobs
 
 SEVERITY_COLOUR = {
     Severity.HEALTHY: "green",
@@ -715,11 +741,21 @@ def _fix_batch(targets: list[Path], args) -> int:
 
     paint = ui.colour_for(ui.enabled(override=False if getattr(args, "no_color", False) else None))
     out_dir = Path(args.out_dir).resolve() if args.out_dir else None
+    if out_dir is not None:
+        # One file used to create the folder and a folder did not, so a batch into a fresh
+        # `--out-dir` failed every file with a message about a staging file nobody asked for.
+        out_dir.mkdir(parents=True, exist_ok=True)
     files = [f for f in iter_media([str(t) for t in targets])
              if out_dir is None or out_dir not in [f.resolve(), *f.resolve().parents]]
     repaired, failed, need_ref, skipped = [], [], [], []
     total = len(files)
+    jobs = _effective_jobs(args)
+    if jobs > 1 and total > 1:
+        # The per-file lines are the readable part; saying why they arrive in another order (and
+        # that the machine is being loaded) belongs on stderr.
+        print(f"repairing {total} files, {jobs} at a time", file=sys.stderr)
 
+    pending: list[tuple[int, Path, Path, Any]] = []
     for index, f in enumerate(files, 1):
         counter = paint(f"[{index}/{total}]".ljust(9), "dim")
         d = diagnose(f, hash_file=False, deep=args.deep)
@@ -737,10 +773,29 @@ def _fix_batch(targets: list[Path], args) -> int:
 
         out = ((out_dir / (f.stem + ".repaired" + f.suffix)) if out_dir
                else f.with_name(f.stem + ".repaired" + f.suffix))
-        if not args.quiet and sys.stdout.isatty():
-            # Only on a real terminal: a carriage-return progress line is noise in a log file.
-            print(f"  {counter} {paint('work  ', 'cyan')} {f.name:<44} repairing…", end="\r")
-        result = _repair(f, out, args, d)
+        pending.append((index, f, out, d))
+
+    def run(item: tuple[int, Path, Path, Any]):
+        _index, f, out, d = item
+        return item, _repair(f, out, args, d)
+
+    if jobs == 1:
+        outcomes = []
+        for item in pending:
+            index, f, _out, _d = item
+            if not args.quiet and sys.stdout.isatty():
+                # Only on a real terminal: a carriage-return progress line is noise in a log file.
+                print(f"  {paint(f'[{index}/{total}]'.ljust(9), 'dim')} "
+                      f"{paint('work  ', 'cyan')} {f.name:<44} repairing…", end=chr(13))
+            outcomes.append(run(item))
+    else:
+        # `map` hands results back in submission order, so the table below is byte-identical to a
+        # one-at-a-time run however the file system finishes them.
+        with futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+            outcomes = list(pool.map(run, pending))
+
+    for (index, f, _out, d), result in outcomes:
+        counter = paint(f"[{index}/{total}]".ljust(9), "dim")
         if _result_ok(result):
             repaired.append((f, result))
             dropped = result.get("dropped_seconds")
@@ -850,6 +905,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="print only failures and the summary")
     f.add_argument("--verbose", action="store_true",
                    help="batch: print each repaired file's notes")
+    f.add_argument("-j", "--jobs", type=_positive_int, default=1,
+                   help="batch: repair this many files at once (default 1; ffmpeg is already "
+                        "multithreaded, so 2-4 is usually where the time goes down and the "
+                        "machine stays usable)")
     f.add_argument("--no-color", action="store_true", help="never emit ANSI colour")
     f.add_argument("--brief", action="store_true",
                    help="one line per file instead of the full JSON report")

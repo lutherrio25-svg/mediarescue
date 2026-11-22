@@ -1,6 +1,10 @@
 import json
+import threading
+import time
 import types
 from typing import ClassVar
+
+import pytest
 
 from mediarescue.cli import main
 
@@ -319,3 +323,97 @@ def test_a_healthy_file_still_answers_in_the_shape_the_mode_asked_for(tmp_path, 
     assert main(["fix", str(src), "--brief", "--no-color"]) == 0
     line = capsys.readouterr().out.strip()
     assert line.startswith("none: nothing to repair")
+
+
+def _batch_fixture(tmp_path, monkeypatch, names, delay=0.15):
+    """Wire `fix` on a folder to a fake repair that takes `delay` seconds and tracks overlap."""
+    from mediarescue import cli
+
+    for name in names:
+        (tmp_path / name).write_bytes(b"x")
+
+    live: list[str] = []
+    peak: list[int] = []
+    lock = threading.Lock()
+
+    def fake_repair(src, out, args, d):
+        with lock:
+            live.append(src.name)
+            peak.append(len(live))
+        time.sleep(delay)
+        with lock:
+            live.remove(src.name)
+        out.write_bytes(b"ok")
+        return {"ok": True, "strategy": "remux", "output": str(out),
+                "verify": {"ok": True, "decode_errors": 0}}
+
+    class _Diagnosis:
+        severity = cli.Severity.CORRUPT_INDEX
+        atoms: ClassVar[list] = []
+        gaps: ClassVar[list] = []
+        notes: ClassVar[list] = ["index lost"]
+
+    monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
+    monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)
+    monkeypatch.setattr(cli, "iter_media", lambda paths: [tmp_path / n for n in names])
+    monkeypatch.setattr(cli, "_repair", fake_repair)
+    return peak
+
+
+def test_jobs_repairs_several_files_at_once_and_keeps_the_table_order(tmp_path, capsys,
+                                                                     monkeypatch):
+    """The reason to ask for --jobs: wall time. The reason not to fear it: the lines still come
+    out in folder order, because the pool hands results back in submission order."""
+    names = ["a.mp4", "b.mp4", "c.mp4", "d.mp4"]
+    peak = _batch_fixture(tmp_path, monkeypatch, names)
+
+    started = time.monotonic()
+    assert main(["fix", str(tmp_path), "--jobs", "4", "--no-color"]) == 0
+    elapsed = time.monotonic() - started
+
+    assert max(peak) >= 2, f"nothing ran at the same time: {peak}"
+    assert elapsed < 0.55, f"4 x 0.15s took {elapsed:.2f}s, so it did not overlap"
+    out = capsys.readouterr().out
+    assert [name for name in names if name in out] == names
+    assert out.index("a.mp4") < out.index("b.mp4") < out.index("c.mp4") < out.index("d.mp4")
+
+
+def test_the_default_is_still_one_file_at_a_time(tmp_path, capsys, monkeypatch):
+    names = ["a.mp4", "b.mp4", "c.mp4"]
+    peak = _batch_fixture(tmp_path, monkeypatch, names, delay=0.05)
+
+    assert main(["fix", str(tmp_path), "--no-color"]) == 0
+    assert max(peak) == 1
+
+
+@pytest.mark.parametrize("bad", ["0", "-2", "two"])
+def test_jobs_rejects_what_is_not_a_positive_whole_number(tmp_path, capsys, bad):
+    (tmp_path / "a.mp4").write_bytes(b"x")
+    with pytest.raises(SystemExit) as caught:
+        main(["fix", str(tmp_path), "--jobs", bad])
+    assert caught.value.code == 2
+    assert "--jobs" in capsys.readouterr().err
+
+
+def test_jobs_steps_aside_when_the_search_needs_shared_state(capsys):
+    from mediarescue import cli
+
+    assert cli._effective_jobs(types.SimpleNamespace(jobs=4, find_source=True)) == 1
+    assert "ignored with --find-source" in capsys.readouterr().err
+    assert cli._effective_jobs(types.SimpleNamespace(jobs=4, find_source=False)) == 4
+
+
+def test_a_batch_creates_the_out_dir_it_was_given(tmp_path, capsys, monkeypatch):
+    """Pointing a folder at a folder that does not exist yet is a normal thing to do, and one
+    file already handled it. A batch used to fail every file with a message about a staging
+    file the caller never named."""
+    names = ["a.mp4", "b.mp4"]
+    _batch_fixture(tmp_path, monkeypatch, names, delay=0.0)
+    fresh = tmp_path / "recovered" / "deep"
+
+    assert main(["fix", str(tmp_path), "--out-dir", str(fresh), "--no-color"]) == 0
+
+    assert fresh.is_dir()
+    assert sorted(p.name for p in fresh.glob("*.repaired.mp4")) == ["a.repaired.mp4",
+                                                                  "b.repaired.mp4"]
+    assert "FAILED" not in capsys.readouterr().out

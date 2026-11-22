@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.10.0
+
+A folder is no longer one file at a time.
+
+- **`--jobs N` / `-j N`** repairs N files concurrently. The per-file table is still printed in folder
+  order — the pool hands results back in submission order — so a batch log compares line-for-line
+  with a one-at-a-time run. Default stays `1`. Measured on an 8-core box: 8 damaged 30s MKVs
+  **9.0s → 2.6s** at `--jobs 6`; 4 files of 90s went 7.0s → 6.4s, because ffmpeg already saturates
+  the cores from a single file. `--jobs` is ignored (with a note on stderr) when `--find-source` is
+  on, since the search keeps shared state.
+- **`--jobs` rejects `0`, `-2` and `two`** with exit `2` instead of doing something surprising.
+- **A batch creates the `--out-dir` it was given.** One file already did; a folder did not, so
+  `fix <folder> --out-dir <new folder>` failed every file with a message about a staging file the
+  caller never named. Both now land in the same place.
+- `pytest -q` is 895 passed and `ruff check .` is clean.
+
 ## 0.9.3
 
 `fix` prints JSON by default, and that JSON was not JSON.
