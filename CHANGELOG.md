@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.2
+
+What happens after a repair has been proven wrong. 0.9.1 stopped calling such a file `ok`; it was
+still left on disk, under the name `fix` would have used for a successful repair.
+
+- **A failed repair no longer leaves its output behind.** The file that failed its probe or decode
+  gate is deleted, `discarded` names it, `output` comes back empty, and `--brief` ends with
+  `· removed damaged.repaired.mkv`. This matters because `scan` deliberately skips names the tool
+  owns (`*.repaired.*`, `*.stage.*`) — a leftover that does not play would sit next to the original
+  looking like a repair that worked, and the next scan would walk past it. Only the path the
+  strategy itself reported writing is touched, never the damaged file.
+- **`-o` may not name the file being repaired.** `fix broken.mkv -o broken.mkv` used to hand the
+  source to a strategy as its own output, which is the one way this tool could destroy the copy the
+  user is trying to save. It now exits `2` with `refusing: -o names the file being repaired`, and
+  the original is byte-identical afterwards.
+- `pytest -q` is 886 passed and `ruff check .` is clean.
+
 ## 0.9.1
 
 Two places where the tool said more than it had measured. Both surfaced by auditing 0.9.0 against

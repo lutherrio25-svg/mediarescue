@@ -490,7 +490,31 @@ def _repair(src: Path, out: Path, args, d) -> dict:
             # file the same dict already marks as failed.
             result["ok"] = False
             result["reason"] = _gate_reason(result)
+            _discard_written(result, src)
     return result
+
+
+def _discard_written(result: dict, src: Path) -> None:
+    """Delete the file this run wrote once it failed its own gates.
+
+    A `.repaired.` file that does not play is worse than no file at all: `scan` deliberately
+    skips names the tool owns, so it would sit next to the original looking like a repair that
+    worked. Only `result["output"]` is touched -- that key is set by the strategy itself, and
+    only after it claims to have written it -- and never the source.
+    """
+    written = (result.get("output") or "").strip()
+    if not written:
+        return
+    path = Path(written)
+    try:
+        if path.is_file() and path.resolve() != src.resolve():
+            path.unlink()
+            result["discarded"] = str(path)
+            result["output"] = ""
+    except OSError as exc:
+        # A file we cannot remove is worth saying out loud rather than hiding.
+        result["discarded"] = ""
+        result["discard_error"] = str(exc)
 
 
 def _gate_reason(result: dict) -> str:
@@ -624,6 +648,11 @@ def _fix_single(src: Path, args) -> int:
         out = folder / (src.stem + ".repaired" + src.suffix)
     else:
         out = src.with_name(src.stem + ".repaired" + src.suffix)
+    if out.resolve() == src.resolve():
+        # The whole promise is "the original is never touched"; writing the repair over the file
+        # being repaired is the one flag that could break it.
+        print("refusing: -o names the file being repaired; give it another name", file=sys.stderr)
+        return 2
     if not getattr(args, "quiet", False):
         # A 300 MB repair takes minutes; say what is happening instead of going silent.
         chosen, _ = _resolve_strategy(src, d, args)
@@ -640,9 +669,15 @@ def _brief_line(result: dict) -> str:
         # its useful line is the last one.
         reason = result.get("reason")
         if reason:
-            return f"{result.get('strategy', '?')}: failed — {reason}"
-        lines = (result.get("log") or "").strip().splitlines()
-        return f"{result.get('strategy', '?')}: failed — {lines[-1][-200:] if lines else 'no detail'}"
+            text = f"{result.get('strategy', '?')}: failed — {reason}"
+        else:
+            lines = (result.get("log") or "").strip().splitlines()
+            text = (f"{result.get('strategy', '?')}: failed — "
+                    f"{lines[-1][-200:] if lines else 'no detail'}")
+        if result.get("discarded"):
+            # The user should not go looking for a file this run already deleted.
+            text += f" · removed {Path(result['discarded']).name}"
+        return text
     probe_info = result.get("probe") or {}
     verify = result.get("verify") or {}
     parts = [f"{result.get('strategy', '?')} → {Path(result['output']).name}"]

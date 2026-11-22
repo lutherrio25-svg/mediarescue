@@ -80,7 +80,12 @@ def test_fix_fails_honestly_when_the_payload_is_gone(tmp_path, capsys):
 
     assert main(["fix", str(bad), "-o", str(out), "--deep"]) == 1
     printed = capsys.readouterr().out
-    assert '"decode_errors"' in printed and out.exists()
+    # The verdict carries the decode count, and the file it was measured on is gone: a `-o` file
+    # that does not play is not something to leave lying around under a name the user chose.
+    assert '"decode_errors"' in printed
+    assert '"ok": false' in printed
+    assert not out.exists()
+    assert '"discarded"' in printed
 
 
 @needs_ffmpeg

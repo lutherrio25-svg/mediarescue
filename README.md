@@ -75,7 +75,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.9.1 — doctor
+mediarescue 0.9.2 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -105,7 +105,7 @@ No flags to remember: run `mediarescue` with no arguments in a terminal and you 
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ mediarescue 0.9.1                                                            │
+│ mediarescue 0.9.2                                                            │
 │ repair damaged video and audio files; originals are never touched            │
 └──────────────────────────────────────────────────────────────────────────────┘
 
@@ -340,6 +340,12 @@ diagnosis: mkv-headless — the EBML header is gone, but an intact Cluster start
 
 `ok` in that object is the verdict, not "the strategy ran": an output file that `ffmpeg` cannot
 open or cannot decode comes back `false` with a `reason` naming the failure, and `fix` exits `1`.
+
+When that happens the file is not left behind. It is named in `discarded`, `output` is empty, and
+`--brief` ends with `· removed damaged.repaired.mkv` — a `.repaired.` file that does not play is
+worse than none, because `scan` skips this tool's own output names and would walk straight past it.
+The damaged file itself is never touched, and `-o` refuses to name it, since writing a repair over
+the only copy of the original is the one way this could lose your file.
 
 Leave out `--reference` and it looks for a healthy Matroska beside the damaged file (same folder,
 sub-folders, one level up), ranked by shared name words then by size, and it will try each

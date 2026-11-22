@@ -178,8 +178,13 @@ def _repair_with(tmp_path, monkeypatch, probe_info, decode):
 
     src = tmp_path / "broken.mp4"
     src.write_bytes(b"not really a video")
+
+    def fake_remux(_src, out, **_kw):
+        out.write_bytes(b"fake fixed bytes")
+        return True, ""
+
     monkeypatch.setattr(cli, "_resolve_strategy", lambda *a, **k: ("remux", None))
-    monkeypatch.setattr(cli, "remux", lambda *a, **k: (True, ""))
+    monkeypatch.setattr(cli, "remux", fake_remux)
     monkeypatch.setattr(cli, "probe", lambda p: probe_info)
     monkeypatch.setattr(ffmpeg, "decode_check", lambda p: decode)
     return cli._repair(src, tmp_path / "broken.repaired.mp4", _FixArgs(),
@@ -195,6 +200,50 @@ def test_a_written_file_that_does_not_decode_is_not_ok(tmp_path, monkeypatch):
     assert result["ok"] is False
     assert result["verify"]["decode_errors"] == 7
     assert "does not decode cleanly" in result["reason"]
+
+
+def test_a_failed_repair_leaves_no_output_behind(tmp_path, monkeypatch):
+    """A `.repaired.` file that does not play must not survive: `scan` skips names the tool owns,
+    so it would sit beside the original looking like a repair that worked."""
+    result = _repair_with(tmp_path, monkeypatch,
+                          {"ok": True, "duration": 1.0, "streams": ["h264"]},
+                          (False, 7, "Cannot determine format of input 0:0 after EOF"))
+
+    assert not (tmp_path / "broken.repaired.mp4").exists()
+    assert result["discarded"].endswith("broken.repaired.mp4")
+    assert result["output"] == ""
+    assert (tmp_path / "broken.mp4").exists()
+
+
+def test_a_good_repair_keeps_its_output(tmp_path, monkeypatch):
+    """The cleanup must not touch a file that passed every gate."""
+    result = _repair_with(tmp_path, monkeypatch,
+                          {"ok": True, "duration": 1.0, "streams": ["h264"]},
+                          (True, 0, ""))
+
+    assert (tmp_path / "broken.repaired.mp4").exists()
+    assert "discarded" not in result
+
+
+def test_fix_refuses_to_write_the_repair_over_the_original(tmp_path, capsys, monkeypatch):
+    """`-o <the same file>` is the one flag that could break "the original is never touched"."""
+    from mediarescue import cli
+
+    src = tmp_path / "broken.mp4"
+    src.write_bytes(b"original bytes that must survive")
+
+    class _Diagnosis:
+        severity = cli.Severity.CORRUPT_PAYLOAD
+        notes: ClassVar[list] = []
+        atoms: ClassVar[list] = []
+        gaps: ClassVar[list] = []
+
+    monkeypatch.setattr(cli, "diagnose", lambda *a, **k: _Diagnosis())
+    monkeypatch.setattr(cli, "have_ffmpeg", lambda: True)
+
+    assert main(["fix", str(src), "-o", str(src), "--no-color"]) == 2
+    assert "names the file being repaired" in capsys.readouterr().err
+    assert src.read_bytes() == b"original bytes that must survive"
 
 
 def test_a_written_file_ffmpeg_cannot_open_is_not_ok(tmp_path, monkeypatch):
