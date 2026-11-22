@@ -52,6 +52,11 @@ jobs:
           if ($version -notmatch "^mediarescue \d+\.\d+\.\d+$") { throw "unexpected --version: $version" }
           & $exe doctor --no-color
           if ($LASTEXITCODE -ne 0) { throw "doctor said the machine cannot repair files" }
+          # The window build is the one a Start Menu shortcut opens; if PyInstaller ever drops Tk
+          # from it, the installer would still work and double-click would do nothing at all.
+          if (-not (Test-Path "dist-exe\mediarescue\mediarescue-window.exe")) {
+            throw "the windowed exe was not built"
+          }
 
       - name: build the installer
         shell: pwsh
@@ -75,6 +80,7 @@ jobs:
           path: |
             dist-setup/*.exe
             dist-exe/mediarescue/mediarescue.exe
+            dist-exe/mediarescue/mediarescue-window.exe
 
       - name: attach the installer to the release
         if: startsWith(github.ref, 'refs/tags/v')

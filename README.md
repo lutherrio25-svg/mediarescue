@@ -15,7 +15,7 @@ heads, fragmented MP4s that lost their init segment, downloads that never finish
 is gone and no intact copy exists anywhere, it can search the web for the original upload and
 repair with that.
 
-![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png?v=0.11.0)
+![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png?v=0.12.0)
 
 The screenshot is a real session: `scan` on a folder holding one healthy MP4, one healthy MP3, one
 AVI whose `idx1` points at the wrong chunks, and one AVI whose index was cut off. Every line below a
@@ -26,9 +26,23 @@ a placeholder (`PS C:\media>` is not a real machine).
 
 **Windows, for people who do not have Python and do not want any:** download
 `mediarescue-<version>-setup.exe` from the [releases page](https://github.com/lutherrio25-svg/mediarescue/releases/latest),
-double-click it, and start **mediarescue** from the Start Menu. The installer is per-user (no admin
-prompt), it carries ffmpeg inside it, and it never touches your `PATH`. The exe and the installer
-are built by CI for every release, so they cannot drift from the code.
+double-click it, and start **mediarescue** from the Start Menu. It opens a window — no terminal, no
+command to type. The installer is per-user (no admin prompt), it carries ffmpeg inside it, and it
+never touches your `PATH`. The exe and the installer are built by CI for every release, so they
+cannot drift from the code.
+
+The Start Menu gets two entries: **mediarescue** (the window) and **mediarescue (command line)**
+(the same program with a console, for scripts and for anyone who prefers typing). Both live in one
+folder and share one ffmpeg.
+
+![the mediarescue window: a file field, an optional reference file, one Repair button, and the log of what it did](docs/window.png?v=0.12.0)
+
+The window is a shell around the same decisions the command line makes, not a second
+implementation: it takes its defaults from the command line's own parser and calls the same
+diagnose-and-repair code, so the two cannot drift. It keeps the rules — your original file is never
+written to, a repair that fails its own decode check is deleted instead of left behind looking
+repaired, and a healthy file is skipped rather than rewritten. Dropping a file onto the shortcut
+opens the window with that file already filled in.
 
 The installer carries an ffmpeg build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) so nothing
 else has to be installed. ffmpeg is GPL-licensed and runs as a separate program — mediarescue stays
@@ -87,7 +101,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.11.0 — doctor
+mediarescue 0.12.0 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -113,11 +127,11 @@ check to test a specific folder.
 
 No flags to remember: run `mediarescue` with no arguments in a terminal and you get a menu.
 
-![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png?v=0.11.0)
+![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png?v=0.12.0)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ mediarescue 0.11.0                                                           │
+│ mediarescue 0.12.0                                                           │
 │ repair damaged video and audio files; originals are never touched            │
 └──────────────────────────────────────────────────────────────────────────────┘
 
@@ -166,7 +180,7 @@ Read it left to right: what is wrong, how big, whether it can be rebuilt (`fix` 
 green or red in a terminal), and which file. The last line tells you the exact command to run next,
 with your own path already filled in. Add `--out report.json` to keep the full details.
 
-![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png?v=0.11.0)
+![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png?v=0.12.0)
 
 `C:\media` in that screenshot is a placeholder folder, not a real machine; the paths are otherwise
 exactly what the tool printed.
@@ -438,7 +452,7 @@ host or on the site it came from. Instead of hunting for it yourself:
 mediarescue source "D:/broken-file/clip.mp4"
 ```
 
-![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png?v=0.11.0)
+![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png?v=0.12.0)
 
 That screenshot is the output of a real run (a 30-second Big Buck Bunny clip whose `moov`
 box was cut off); the window frame around it is drawn for the README, and the shell prompt — user

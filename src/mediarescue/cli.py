@@ -223,6 +223,12 @@ def cmd_menu(args) -> int:
     return run_menu(keys=make_key_reader())
 
 
+def cmd_gui(args) -> int:
+    """Open the window. Imported here so the command line never needs Tk to run."""
+    from .gui import main as gui_main
+    return gui_main([args.target] if getattr(args, "target", None) else [])
+
+
 def _pick_strategy(severity: Severity, requested: str) -> str:
     if requested != "auto":
         return requested
@@ -885,13 +891,8 @@ def _fix_batch(targets: list[Path], args) -> int:
     return 1 if left else 0
 
 
-def main(argv: list[str] | None = None) -> int:
-    # A filename can contain characters the console cannot encode (NTFS allows lone surrogates);
-    # without this a whole scan aborts mid-table with OSError EINVAL instead of finishing.
-    ui.forgiving_output()
-    # Without this, `not argv` is true for every real invocation and the no-argument shortcut
-    # swallows the command line: `mediarescue scan x` would open the menu instead of scanning.
-    argv = list(sys.argv[1:] if argv is None else argv)
+def build_parser() -> argparse.ArgumentParser:
+    """The command line in one place, so a window or a test builds the same arguments."""
     ap = argparse.ArgumentParser(
         prog="mediarescue",
         description="Diagnose and repair damaged media; originals are never modified.",
@@ -1007,6 +1008,22 @@ def main(argv: list[str] | None = None) -> int:
 
     m = sub.add_parser("menu", help="interactive all-in-one menu (also opens when run with no arguments)")
     m.set_defaults(func=cmd_menu)
+
+    g = sub.add_parser("gui", help="open a window instead of using the terminal")
+    g.add_argument("target", nargs="?", help="a file or folder to fill in before the window opens")
+    g.set_defaults(func=cmd_gui)
+
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    # A filename can contain characters the console cannot encode (NTFS allows lone surrogates);
+    # without this a whole scan aborts mid-table with OSError EINVAL instead of finishing.
+    ui.forgiving_output()
+    # Without this, `not argv` is true for every real invocation and the no-argument shortcut
+    # swallows the command line: `mediarescue scan x` would open the menu instead of scanning.
+    argv = list(sys.argv[1:] if argv is None else argv)
+    ap = build_parser()
 
     if not argv:
         # A bare `mediarescue` in a terminal is someone who has not read the README yet: give them

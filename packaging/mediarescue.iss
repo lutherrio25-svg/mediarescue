@@ -2,14 +2,16 @@
 ;
 ; The end goal is one file a non-technical person can double-click: mediarescue-<version>-setup.exe.
 ; It installs per-user (no UAC prompt, no admin), puts ffmpeg beside the exe, and creates a Start
-; Menu shortcut -- which is where the all-in-one menu shows up when the program is started with no
-; arguments.
+; Menu shortcut. That shortcut opens the *window* build -- a program called from Explorer must not
+; flash a console at someone who has never opened one -- while the command line build sits beside
+; it for scripts and for anyone who prefers it.
 ;
-; Build: ISCC.exe /DAppVersion=0.11.0 packaging\mediarescue.iss   (from a dist-exe\mediarescue folder)
+; Build: ISCC.exe /DAppVersion=0.12.0 packaging\mediarescue.iss   (from a dist-exe\mediarescue folder)
 
 #define AppName "mediarescue"
 #define AppPublisher "lutherrio25-svg"
-#define AppExe "mediarescue.exe"
+#define AppExe "mediarescue-window.exe"
+#define CliExe "mediarescue.exe"
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
@@ -40,6 +42,7 @@ Source: "..\dist-exe\mediarescue\*"; DestDir: "{app}"; Flags: recursesubdirs cre
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+Name: "{group}\{#AppName} (command line)"; Filename: "{app}\{#CliExe}"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 

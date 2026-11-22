@@ -5,6 +5,11 @@ One *folder*, not one file: it starts instantly, it carries ffmpeg and ffprobe b
 the person running it never installs anything, and Inno Setup then turns that folder into a single
 setup.exe. ffmpeg is found through MEDIARESCUE_BUNDLE_FFMPEG/FFPROBE when set (CI downloads a
 static build), otherwise from PATH.
+
+Two exes share the one folder, because "console or not" is a property of the exe rather than of the
+code: `mediarescue.exe` keeps the command line (scripts, README, CI smoke test) and
+`mediarescue-window.exe` is the same program with no console window -- the one the Start Menu entry
+points at. They share `_internal/`, so the second exe costs a launcher, not another 200 MB.
 """
 import os
 import shutil
@@ -25,40 +30,62 @@ def _tool(name: str) -> str:
 
 
 icon = root / "packaging" / "mediarescue.ico"
+version_file = root / "packaging" / "version_info.txt"
 
-a = Analysis(
-    [str(root / "packaging" / "entry.py")],
-    pathex=[str(src)],
-    binaries=[(_tool("ffmpeg"), "."), (_tool("ffprobe"), ".")],
-    datas=[],
-    hiddenimports=[],
-    # Nothing here draws a window or runs tests; leaving them out keeps the folder honest about
-    # what it contains.
-    excludes=["tkinter", "pytest", "_pytest"],
-    noarchive=False,
-    optimize=0,
-)
 
-pyz = PYZ(a.pure)
+def _analysis(entry: str, excludes: list[str], binaries=None):
+    return Analysis(
+        [str(root / "packaging" / entry)],
+        pathex=[str(src)],
+        binaries=binaries or [],
+        datas=[],
+        hiddenimports=[],
+        excludes=excludes,
+        noarchive=False,
+        optimize=0,
+    )
+
+
+# The command line does not need Tk; leaving it out keeps that build honest about what it contains.
+a_cli = _analysis("entry.py", ["tkinter", "pytest", "_pytest"],
+                  binaries=[(_tool("ffmpeg"), "."), (_tool("ffprobe"), ".")])
+# The window needs Tk -- the dialogs, the clipboard, the font handling all come with it.
+a_gui = _analysis("entry_gui.py", ["pytest", "_pytest"])
+
+pyz_cli = PYZ(a_cli.pure)
+pyz_gui = PYZ(a_gui.pure)
 
 exe = EXE(
-    pyz,
-    a.scripts,
+    pyz_cli,
+    a_cli.scripts,
     [],
     exclude_binaries=True,
     name="mediarescue",
     console=True,
     upx=False,
     icon=str(icon) if icon.is_file() else None,
-    version=str(root / "packaging" / "version_info.txt")
-    if (root / "packaging" / "version_info.txt").is_file()
-    else None,
+    version=str(version_file) if version_file.is_file() else None,
+)
+
+exe_gui = EXE(
+    pyz_gui,
+    a_gui.scripts,
+    [],
+    exclude_binaries=True,
+    name="mediarescue-window",
+    console=False,
+    upx=False,
+    icon=str(icon) if icon.is_file() else None,
+    version=str(version_file) if version_file.is_file() else None,
 )
 
 coll = COLLECT(
     exe,
-    a.binaries,
-    a.datas,
+    exe_gui,
+    a_cli.binaries,
+    a_gui.binaries,
+    a_cli.datas,
+    a_gui.datas,
     strip=False,
     upx=False,
     name="mediarescue",

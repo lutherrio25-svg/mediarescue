@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.12.0
+
+A window, for the person who will never open a terminal.
+
+- **`mediarescue gui`** opens a window: type or pick a file or a folder, optionally point at a file
+  that still plays, press **Repair**. Progress and the verdict for each file appear in the window,
+  and **Open folder** takes you to the result. The old menu still exists; `fix`, `scan`, `verify`
+  and `doctor` are unchanged and remain the documented surface.
+- The installer now installs two exes that share one `_internal/`: **mediarescue** (window, no
+  console — the Start Menu entry) and **mediarescue (command line)**. "Console or not" belongs to
+  the exe, not to the code, so the window costs a launcher rather than a second copy of ffmpeg.
+- The window is a shell, not a second implementation: it asks `cli.build_parser()` for the defaults
+  and calls `diagnose()` + `cli._repair()` for every decision, so a flag added to `fix` cannot go
+  missing from the window. `cli.build_parser()` is now a function so both can share it.
+- Rules the window keeps: the original is never written to, a repair that fails its own decode check
+  is deleted instead of left behind looking repaired, a healthy file is skipped rather than
+  rewritten, and a second repair of the same file becomes `.repaired-2` instead of overwriting the
+  first.
+- `tests/test_gui.py` covers that hand-off (including that the window receives `--strategy auto`,
+  `--fps 25`, `--max-tries 8` from the real parser), the deletion of a failed repair, the untouched
+  source, the empty folder, and that importing the module pulls in no tkinter — so the suite still
+  runs headless.
+- `tests/test_packaging.py` now also fails if the version tuple in `version_info.txt` drifts (not
+  just the string), and if the installer's shortcut stops pointing at the windowless build.
+
 ## 0.11.0
 
 `--jobs` reaches the other two commands that walk a folder.
