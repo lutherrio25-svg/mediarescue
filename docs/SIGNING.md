@@ -37,9 +37,51 @@ someone else's computer, so it is a rehearsal, never a release.
 | OV certificate (Sectigo, resellers) | from ~$211–$219/yr | your company | Hardware token or cloud HSM (keys can no longer be exported since 2023). SmartScreen reputation still has to accumulate. |
 | EV certificate | from ~$287/yr | your company | Immediate SmartScreen reputation. Hardware token only. |
 
-`mediarescue` qualifies for the first row: MIT (OSI-approved), public repo, released, actively
-maintained, and the binaries are built from the repo in CI — which is exactly the condition SignPath
-verifies. The cost is that the publisher shown is the foundation, not `Star Corps bks`.
+`mediarescue` meets the *paper* conditions of the first row: MIT (OSI-approved), public repo, released
+22 times, built from source in CI. That turned out not to be the test that decides it.
+
+## What happened when we applied (2026-11-22)
+
+The OSS request form went in the same day the repository turned six days old. SignPath declined it the
+same day:
+
+> The Foundation program is designed for projects that have already established a certain level of public
+> trust and visibility, so when evaluating applications we look for external signals such as community
+> adoption (GitHub stars, forks, contributors), external articles, independent references or discussions
+> (Reddit, Stack Overflow, YouTube, etc.) or institutional backing, and evidence of sustained activity and
+> engagement.
+
+Read plainly: the free route is a **visibility** check, not a licence-and-quality check. Twenty-two
+releases and a green suite prove the work is real; they prove nothing about whether anyone has heard of
+it. No amount of code changes that — only other people using it does. They invited a re-application once
+the project has that, which is a fair bar and not a door that closed.
+
+Two things worth knowing before paying for a workaround:
+
+- SignPath's paid programme is not the fallback it looks like. Starter is **$500/yr**, and their EV
+  certificates come from GlobalSign, which issues **only to legally registered organisations** and
+  verifies that authority. A personal project is not eligible at any price.
+- An OV-level signature (SignPath Foundation, Certum Open Source) removes `Unknown publisher`
+  immediately, but SmartScreen can still show "unknown app" until the certificate has accumulated
+  reputation. Only EV silences it on day one.
+
+## Cheapest ways to get a name on that dialog
+
+| Route | Cost (real, checked 2026-11-22) | Publisher shown |
+|---|---|---|
+| Certum Open Source, cloud (SimplySign) | **€49 net/yr** | `Open Source Developer, <your name>` |
+| Certum Open Source, card + reader set | €69 net, plus DHL shipping to Indonesia ~€35 | same |
+| Certum Open Source, activation code only | €25 net — only if you already own a cryptoCertum card | same |
+| Azure Artifact Signing | $9.99/mo | your verified identity — identity validation is the gate, check eligibility before paying |
+
+Certum's OSS certificate is the only one designed for exactly this situation: an individual, a public
+project, one year, €49. What it requires: proof of identity, the public project itself, and their
+verification (documents listed at <https://support.certum.eu/en/code-signing-required-documents/>). The
+certificate carries the natural person's data prefixed with the words `Open Source Developer`, is RSA
+3072, and lives either on a CC EAL6+ card or in their cloud HSM. `packaging/sign.ps1` already handles
+both shapes: thumbprint from the store for the cloud/card signer, `.pfx` for a file.
+
+## Re-applying for the free route (what would have to be true)
 
 ## Applying for the free route (the only work that needs a human)
 

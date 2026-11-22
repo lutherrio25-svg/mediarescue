@@ -128,12 +128,18 @@ check to test a specific folder.
 ## Windows build and code signing
 
 The installer and both executables are built in CI from this repository on every tag, so the file you
-download is the file this source produced. They are **not code signed yet**: the project is applying
-for free code signing through the [SignPath Foundation](https://signpath.org/), which signs open
-source binaries in its own pipeline and vouches that they were built from the public repository. Until
-that is granted, Windows shows `Unknown publisher` when the installer downloads — that is the missing
-signature, not a problem with the file. Once granted, the same pipeline signs what it builds and the
-publisher shown will be `SignPath Foundation`.
+download is the file this source produced. They are **not code signed**. This project applied for free
+code signing through the [SignPath Foundation](https://signpath.org/) and was declined on 2026-11-22:
+the Foundation signs projects that already have visible community adoption, and a six-day-old repository
+does not. That is a fair bar, and it means Windows will keep showing `Unknown publisher` when the
+installer downloads — that is the missing signature, not a problem with the file.
+
+What to do about it today: check the hash. GitHub lists a SHA-256 digest next to every asset, and
+`Get-FileHash .\mediarescue-0.13.0-setup.exe -Algorithm SHA256` reproduces it. A digest that matches
+proves the bytes are the ones CI built, which is the guarantee the signature would have carried.
+
+`docs/SIGNING.md` records the outcome, the exact wording of the rejection, what a re-application would
+need, and what a paid certificate would actually buy.
 
 In the meantime, check the hash GitHub lists beside the asset (or the one in the release notes) before
 running it:
