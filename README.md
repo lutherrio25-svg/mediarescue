@@ -43,7 +43,7 @@ The Start Menu gets two entries: **mediarescue** (the window) and **mediarescue 
 (the same program with a console, for scripts and for anyone who prefers typing). Both live in one
 folder and share one ffmpeg.
 
-![the mediarescue window: a dark title bar, a menu row, a flat icon toolbar, the source and its verdict, and a status bar reporting one repaired file](docs/window.png?v=0.13.0)
+![the mediarescue window: a dark app bar with the mark and the wordmark, the source it was given with the verdict it got, the buttons for the two actions, and a status bar reporting one repaired file](docs/window.png?v=0.13.0-brand)
 
 The window is a shell around the same decisions the command line makes, not a second
 implementation: it takes its defaults from the command line's own parser and calls the same
@@ -52,9 +52,14 @@ written to, a repair that fails its own decode check is deleted instead of left 
 repaired, and a healthy file is skipped rather than rewritten. Dropping a file onto the shortcut
 opens the window with that file already filled in.
 
-The installer carries an ffmpeg build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) so nothing
-else has to be installed. ffmpeg is GPL-licensed and runs as a separate program — mediarescue stays
-MIT — and its source is linked on that page; nothing in this repository is GPL-derived.
+The installer carries a **shared LGPL build of ffmpeg** from
+[BtbN's FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) — one `ffmpeg.exe`, one
+`ffprobe.exe` and the shared libraries beside them — so nothing else has to be installed. That build
+is LGPL-2.1-or-later and runs as a separate program: mediarescue stays MIT, calls ffmpeg through
+its command line only, and nothing in this repository is derived from ffmpeg. The static GPL pair
+used before was replaced on purpose (it was 336 MiB of two copies of the same codecs, and its
+GPL-only parts were never needed to repair a container); `ffmpeg -L` in the installed folder prints
+the licence the files actually carry.
 
 If you would rather have the command line and already use Python:
 

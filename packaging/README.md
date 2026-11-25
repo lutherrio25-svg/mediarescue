@@ -19,24 +19,32 @@ because a program opened from Explorer must not flash a terminal at someone who 
 ## Locally
 
 ```bash
-# 1. get ffmpeg (a static build; any recent one works)
-curl -L -o ffmpeg.zip https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
-unzip -q ffmpeg.zip -d ffmpeg
+# 1. get the same shared LGPL build CI uses, minus ffplay
+curl -L -o ff-shared.zip \
+  https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-lgpl-shared.zip
+unzip -q ff-shared.zip -d ff-shared
+mv ff-shared/ffmpeg-master-latest-win64-lgpl-shared/bin ff-shared/bin
+rm -f ff-shared/bin/ffplay.exe
 
-# 2. build the folder
-MEDIARESCUE_BUNDLE_FFMPEG="$PWD/ffmpeg/ffmpeg-*/bin/ffmpeg.exe" \
-MEDIARESCUE_BUNDLE_FFPROBE="$PWD/ffmpeg/ffmpeg-*/bin/ffprobe.exe" \
-  python -m PyInstaller --noconfirm --clean --workpath build-exe --distpath dist-exe packaging/mediarescue.spec
+# 2. build the folder (dist/mediarescue/, onedir — there is no dist/*.exe)
+MEDIARESCUE_BUNDLE_FFMPEG_DIR="$PWD/ff-shared/bin" \
+  python -m PyInstaller packaging/mediarescue.spec --noconfirm --clean
 
 # 3. prove it works with no ffmpeg on PATH
-env PATH="/c/Windows/system32" ./dist-exe/mediarescue/mediarescue.exe doctor
+env PATH="/c/Windows/system32" ./dist/mediarescue/mediarescue.exe doctor
 
 # 4. prove the window opens (this one needs a desktop; CI only checks that the file exists)
-./dist-exe/mediarescue/mediarescue-window.exe
+./dist/mediarescue/mediarescue-window.exe
 
-# 5. installer (Inno Setup 6)
-"/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DAppVersion=0.13.0" packaging/mediarescue.iss
+# 5. installer (Inno Setup 6; it is per-user on a normal install)
+mkdir -p dist-exe && cp -a dist/mediarescue dist-exe/
+"$LOCALAPPDATA/Programs/Inno Setup 6/ISCC.exe" /DAppVersion=0.13.0 packaging/mediarescue.iss
+# -> dist-setup/mediarescue-0.13.0-setup.exe
 ```
+
+Without `MEDIARESCUE_BUNDLE_FFMPEG_DIR` the spec falls back to `ffmpeg`/`ffprobe` from `PATH`, and the
+folder grows to ~351 MB because both static binaries carry the same codecs. That fallback exists so a
+source checkout can still build; the release must use the shared directory.
 
 CI does exactly this on `windows-latest` for every `v*` tag (`.github/workflows/build-exe.yml`) and
 attaches the installer to the release.
@@ -51,8 +59,8 @@ attaches the installer to the release.
   \x97 doctor` from the exe and UTF-8 from the wheel. `entry.py` reconfigures stdout/stderr to
   UTF-8 so both print the same bytes; `tests/test_packaging.py` guards it.
 
-A one-file (`--onefile`) build is deliberately not used: it unpacks ~230 MB to a temp folder on
-every start, which is a visible delay for someone who just double-clicked an icon.
+A one-file (`--onefile`) build is deliberately not used: it unpacks the ~190 MB folder to a temp
+location on every start, which is a visible delay for someone who just double-clicked an icon.
 
 ## The third thing that bit us
 
