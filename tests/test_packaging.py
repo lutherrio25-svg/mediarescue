@@ -127,3 +127,38 @@ def test_the_frozen_launcher_keeps_the_exit_code_and_the_utf8_streams():
     text = (ROOT / "packaging" / "entry.py").read_text(encoding="utf-8")
     assert "raise SystemExit(main())" in text, "the CLI's verdict is its exit code"
     assert 'encoding="utf-8"' in text, "a frozen build must print the same bytes as the wheel"
+
+
+def _ico_sizes(path: Path) -> list[int]:
+    """Sizes declared in an .ico directory. Every Windows surface picks a different one, so a file
+    that only carries 256 px looks fine in Explorer and turns to mush in the taskbar."""
+    data = path.read_bytes()
+    assert data[:4] == b"\x00\x00\x01\x00", f"{path.name} is not an icon"
+    count = int.from_bytes(data[4:6], "little")
+    sizes = []
+    for i in range(count):
+        at = 6 + i * 16
+        w = data[at] or 256
+        h = data[at + 1] or 256
+        assert w == h, f"{path.name} entry {i} is not square"
+        sizes.append(w)
+    return sizes
+
+
+def test_the_installer_and_the_exes_carry_the_same_icon():
+    """The icon file is optional for PyInstaller (the spec falls back to none), so its absence is
+    silent: the app would simply ship with the default Python icon on every surface."""
+    ico = ROOT / "packaging" / "mediarescue.ico"
+    assert ico.is_file(), "packaging/mediarescue.ico is missing"
+    sizes = _ico_sizes(ico)
+    assert sizes == [16, 20, 24, 32, 40, 48, 64, 128, 256], f"unexpected icon sizes: {sizes}"
+    # 16 px is drawn on its own grid; if it were the 256 px image scaled down the cut-out would blur
+    # into the shield, which is exactly what makes small Windows icons look amateur.
+    sixteen = ico.read_bytes()
+    assert len(sixteen) > 1024
+
+    spec = (ROOT / "packaging" / "mediarescue.spec").read_text(encoding="utf-8")
+    assert 'root / "packaging" / "mediarescue.ico"' in spec, "the spec must point at the icon"
+
+    iss = (ROOT / "packaging" / "mediarescue.iss").read_text(encoding="utf-8")
+    assert "SetupIconFile=mediarescue.ico" in iss, "the installer must not fall back to the Inno icon"

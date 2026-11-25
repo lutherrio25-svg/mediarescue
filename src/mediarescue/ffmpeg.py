@@ -131,5 +131,6 @@ def probe(path: Path, timeout: int = 120) -> dict:
         "ok": bool(streams),
         "duration": float(data.get("format", {}).get("duration", 0) or 0),
         "streams": [s.get("codec_name") for s in streams],
+        "kinds": [s.get("codec_type") for s in streams],
         "bytes": int(data.get("format", {}).get("size", 0) or 0),
     }

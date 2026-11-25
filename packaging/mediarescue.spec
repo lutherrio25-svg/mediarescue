@@ -33,12 +33,29 @@ icon = root / "packaging" / "mediarescue.ico"
 version_file = root / "packaging" / "version_info.txt"
 
 
-def _analysis(entry: str, excludes: list[str], binaries=None):
+def _ffmpeg_binaries() -> list[tuple[str, str]]:
+    """Prefer the *shared* ffmpeg build: ffmpeg.exe and ffprobe.exe stay under a megabyte while one
+    set of avcodec/avformat/avfilter DLLs serves both of them. Two static binaries cost 336 MB here
+    -- 96% of the whole folder -- against 162 MB shared, and the LGPL variant keeps this project
+    free of GPL-only codecs it never needed for repairing containers."""
+    directory = os.environ.get("MEDIARESCUE_BUNDLE_FFMPEG_DIR")
+    if directory:
+        base = Path(directory)
+        files = [(str(base / "ffmpeg.exe"), "."), (str(base / "ffprobe.exe"), ".")]
+        files += [(str(dll), ".") for dll in sorted(base.glob("*.dll"))]
+        missing = [source for source, _ in files if not Path(source).is_file()]
+        if missing:
+            raise SystemExit(f"MEDIARESCUE_BUNDLE_FFMPEG_DIR is missing: {', '.join(missing)}")
+        return files
+    return [(_tool("ffmpeg"), "."), (_tool("ffprobe"), ".")]
+
+
+def _analysis(entry: str, excludes: list[str], binaries=None, datas=None):
     return Analysis(
         [str(root / "packaging" / entry)],
         pathex=[str(src)],
         binaries=binaries or [],
-        datas=[],
+        datas=datas or [],
         hiddenimports=[],
         excludes=excludes,
         noarchive=False,
@@ -47,10 +64,12 @@ def _analysis(entry: str, excludes: list[str], binaries=None):
 
 
 # The command line does not need Tk; leaving it out keeps that build honest about what it contains.
-a_cli = _analysis("entry.py", ["tkinter", "pytest", "_pytest"],
-                  binaries=[(_tool("ffmpeg"), "."), (_tool("ffprobe"), ".")])
+a_cli = _analysis("entry.py", ["tkinter", "pytest", "_pytest"], binaries=_ffmpeg_binaries())
 # The window needs Tk -- the dialogs, the clipboard, the font handling all come with it.
-a_gui = _analysis("entry_gui.py", ["pytest", "_pytest"])
+# The .ico travels inside the build: Tk otherwise paints its own feather in the title bar and the
+# taskbar, no matter what icon the exe carries.
+a_gui = _analysis("entry_gui.py", ["pytest", "_pytest"],
+                  datas=[(str(icon), ".")] if icon.is_file() else [])
 
 pyz_cli = PYZ(a_cli.pure)
 pyz_gui = PYZ(a_gui.pure)

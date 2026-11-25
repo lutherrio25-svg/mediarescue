@@ -182,6 +182,9 @@ def test_the_window_can_actually_be_built():
         app.root.update()
         assert app.root.title().startswith("mediarescue")
         assert app.status.get().startswith("Ready")
+        # Repair is the primary action and stays dark until there is something to repair.
+        assert str(app.go.cget("state")) == "disabled"
+        app.target_var.set("broken.mp4")
         assert str(app.go.cget("state")) == "normal"
         assert str(app.stop_button.cget("state")) == "disabled"
         # The tabs are the four the window promises: facts, why, options, log.

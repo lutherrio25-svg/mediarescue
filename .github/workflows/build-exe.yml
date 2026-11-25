@@ -33,16 +33,19 @@ jobs:
           pip install pyinstaller .
           pip show mediarescue | Select-String -Pattern "^Version"
 
-      - name: fetch ffmpeg (static, LGPL-ish gyan essentials)
+      - name: fetch ffmpeg (shared LGPL build)
         shell: pwsh
         run: |
           $zip = Join-Path $env:RUNNER_TEMP "ffmpeg.zip"
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $zip
+          # Shared build: ffmpeg.exe and ffprobe.exe stay under a megabyte each and share one
+          # avcodec/avformat/avfilter DLL set. Two static binaries were 336 MB of the 351 MB folder.
+          Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-lgpl-shared.zip" -OutFile $zip
           Expand-Archive -Path $zip -DestinationPath (Join-Path $env:RUNNER_TEMP "ffmpeg")
           $bin = Get-ChildItem (Join-Path $env:RUNNER_TEMP "ffmpeg") -Directory |
                  Select-Object -First 1 | ForEach-Object { Join-Path $_.FullName "bin" }
-          "MEDIARESCUE_BUNDLE_FFMPEG=$bin\ffmpeg.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "MEDIARESCUE_BUNDLE_FFPROBE=$bin\ffprobe.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+          # ffplay is a media player; a repair tool never opens it.
+          Remove-Item (Join-Path $bin "ffplay.exe") -ErrorAction SilentlyContinue
+          "MEDIARESCUE_BUNDLE_FFMPEG_DIR=$bin" | Out-File -FilePath $env:GITHUB_ENV -Append
           & "$bin\ffmpeg.exe" -version | Select-Object -First 1
 
       - name: build the folder
