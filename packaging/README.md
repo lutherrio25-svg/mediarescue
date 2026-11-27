@@ -38,8 +38,8 @@ env PATH="/c/Windows/system32" ./dist/mediarescue/mediarescue.exe doctor
 
 # 5. installer (Inno Setup 6; it is per-user on a normal install)
 mkdir -p dist-exe && cp -a dist/mediarescue dist-exe/
-"$LOCALAPPDATA/Programs/Inno Setup 6/ISCC.exe" /DAppVersion=0.13.0 packaging/mediarescue.iss
-# -> dist-setup/mediarescue-0.13.0-setup.exe
+"$LOCALAPPDATA/Programs/Inno Setup 6/ISCC.exe" /DAppVersion=0.14.0 packaging/mediarescue.iss
+# -> dist-setup/mediarescue-0.14.0-setup.exe
 ```
 
 Without `MEDIARESCUE_BUNDLE_FFMPEG_DIR` the spec falls back to `ffmpeg`/`ffprobe` from `PATH`, and the

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.14.0
+
+The window wears the product's own colours, and the download stops carrying two copies of ffmpeg.
+
+- **An app bar instead of a toolbar.** The mark and the wordmark sit above the tabs, the buttons are
+  pills, the file picker is a card with a dashed drop zone, and the summary is two columns. The
+  status bar carries `Star Corps bks - v0.14.0`; clicking the version opens **About**.
+- **About is a real dialog.** It shows the build row, a link to the repository, the update status and
+  **Release notes** / **Copy details**. The update check asks the GitHub releases API on a worker
+  thread, so the window never freezes while the network answers, and the dot is green, amber or red
+  for what it actually found.
+- **Help > Check for updates...** and **Help > Release notes** do the same thing from the menu.
+- **The icon survives Tk.** The `.ico` now travels inside the build and is applied as
+  `iconbitmap(default=...)`, so the title bar and the taskbar show the product's icon instead of Tk's
+  blue feather.
+- **The bundle is smaller and the licence is simpler.** Two static 168 MB ffmpeg binaries became the
+  shared LGPL build: `ffmpeg.exe` and `ffprobe.exe` under a megabyte each, one set of
+  avcodec/avformat/avfilter DLLs behind them, `ffplay` dropped. The installed folder drops from
+  **351 MB to 186 MB**, the installer to **~59 MB**, and no GPL-only codec is shipped for container
+  repair that never needed one. `MEDIARESCUE_BUNDLE_FFMPEG_DIR` still points the build at any shared
+  ffmpeg directory, and the static binaries remain the fallback when it is unset.
+- **Upgrades no longer grow.** `[InstallDelete]` wipes `{app}\_internal` before copying, so an
+  upgrade from 0.13.0 cannot leave ~360 MB of orphaned static binaries behind forever, which is what
+  Inno would otherwise do.
+- **The README's window picture is a real capture again.** It was taken before the brand work landed
+  and showed a window that no longer exists; it now comes from a scripted run that repairs a
+  headless Matroska file and reports `1 repaired - 0 skipped - 0 failed`. The ffmpeg paragraph names
+  the build actually shipped, and `packaging/README.md` documents the shared-bundle variables.
+- Nothing about the command line changed: `fix`, `scan`, `verify`, `doctor` and the all-in-one menu
+  behave exactly as in 0.13.0.
+
 ## 0.13.0
 
 The window now looks like the tool it is modelled on, and every band of it is dark.

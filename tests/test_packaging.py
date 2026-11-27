@@ -76,16 +76,29 @@ def _field(text: str, name: str) -> str:
 
 
 def test_the_winget_manifest_describes_the_installer_we_publish():
-    """A manifest that drifts from the release installs the wrong bytes, silently."""
-    folder = WINGET / __version__
-    assert folder.is_dir(), f"no winget manifest for {__version__}"
+    """A manifest that drifts from the release installs the wrong bytes, silently.
+
+    The catalog is allowed to sit behind the repository: a release ships from here the day it is
+    ready, while winget submission waits in a moderator queue that runs for weeks. What it must
+    never do is run *ahead* -- a manifest for a version this repository has not released points at
+    an installer URL and a digest that do not exist -- so the newest manifest is checked for
+    internal consistency and for being no newer than the package version.
+    """
+    folders = sorted((p.name for p in WINGET.iterdir() if p.is_dir()),
+                     key=lambda v: tuple(int(part) for part in v.split(".")))
+    assert folders, "no winget manifest at all"
+    newest = folders[-1]
+    assert tuple(int(p) for p in newest.split(".")) <= tuple(int(p) for p in __version__.split(".")), (
+        f"winget manifest {newest} is newer than the package version {__version__}")
+
+    folder = WINGET / newest
     ver = (folder / "StarCorpsBks.MediaRescue.yaml").read_text(encoding="utf-8")
     inst = (folder / "StarCorpsBks.MediaRescue.installer.yaml").read_text(encoding="utf-8")
     loc = (folder / "StarCorpsBks.MediaRescue.locale.en-US.yaml").read_text(encoding="utf-8")
 
-    assert _field(ver, "PackageVersion") == __version__
-    assert _field(inst, "PackageVersion") == __version__
-    assert _field(loc, "PackageVersion") == __version__
+    assert _field(ver, "PackageVersion") == newest
+    assert _field(inst, "PackageVersion") == newest
+    assert _field(loc, "PackageVersion") == newest
 
     # winget decides which file is which by ManifestType. The default locale must say
     # "defaultLocale": call it "locale" and the client answers "the multi file manifest is
@@ -98,7 +111,7 @@ def test_the_winget_manifest_describes_the_installer_we_publish():
     # Point at the tag, never /releases/latest: a manifest that follows latest installs bytes the
     # digest below it does not describe.
     url = _field(inst, "InstallerUrl")
-    assert url.endswith(f"/download/v{__version__}/mediarescue-{__version__}-setup.exe"), url
+    assert url.endswith(f"/download/v{newest}/mediarescue-{newest}-setup.exe"), url
     digest = _field(inst, "InstallerSha256")
     assert len(digest) == 64 and set(digest) <= set("0123456789ABCDEF"), digest
 
@@ -109,9 +122,9 @@ def test_the_winget_manifest_describes_the_installer_we_publish():
     assert _field(inst, "Scope") == "user"
 
     # Inno names the Programs-and-Features entry from AppVerName, so what winget must look for is
-    # "mediarescue 0.13.0" and not the bare AppName. Miss it and winget installs a second copy
+    # "mediarescue X.Y.Z" and not the bare AppName. Miss it and winget installs a second copy
     # beside the one already on disk instead of upgrading it.
-    assert _field(inst, "DisplayName") == f"mediarescue {__version__}"
+    assert _field(inst, "DisplayName") == f"mediarescue {newest}"
 
 
 def test_the_free_signing_route_is_documented_and_inert():

@@ -17,7 +17,7 @@ heads, fragmented MP4s that lost their init segment, downloads that never finish
 is gone and no intact copy exists anywhere, it can search the web for the original upload and
 repair with that.
 
-![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png?v=0.13.0)
+![mediarescue in a terminal: scan a folder, then repair an AVI index and a cut-off AVI](docs/terminal.png?v=0.14.0)
 
 The screenshot is a real session: `scan` on a folder holding one healthy MP4, one healthy MP3, one
 AVI whose `idx1` points at the wrong chunks, and one AVI whose index was cut off. Every line below a
@@ -43,7 +43,7 @@ The Start Menu gets two entries: **mediarescue** (the window) and **mediarescue 
 (the same program with a console, for scripts and for anyone who prefers typing). Both live in one
 folder and share one ffmpeg.
 
-![the mediarescue window: a dark app bar with the mark and the wordmark, the source it was given with the verdict it got, the buttons for the two actions, and a status bar reporting one repaired file](docs/window.png?v=0.13.0-brand)
+![the mediarescue window: a dark app bar with the mark and the wordmark, the source it was given with the verdict it got, the buttons for the two actions, and a status bar reporting one repaired file](docs/window.png?v=0.14.0-brand)
 
 The window is a shell around the same decisions the command line makes, not a second
 implementation: it takes its defaults from the command line's own parser and calls the same
@@ -114,7 +114,7 @@ mediarescue doctor
 ```
 
 ```
-mediarescue 0.12.0 — doctor
+mediarescue 0.14.0 — doctor
 
   ok    python        3.14.9
   ok    ffmpeg        ffmpeg version N-127043-g5a54fcf75e-20260930
@@ -146,7 +146,7 @@ does not. That is a fair bar, and it means Windows will keep showing `Unknown pu
 installer downloads — that is the missing signature, not a problem with the file.
 
 What to do about it today: check the hash. GitHub lists a SHA-256 digest next to every asset, and
-`Get-FileHash .\mediarescue-0.13.0-setup.exe -Algorithm SHA256` reproduces it. A digest that matches
+`Get-FileHash .\mediarescue-0.14.0-setup.exe -Algorithm SHA256` reproduces it. A digest that matches
 proves the bytes are the ones CI built, which is the guarantee the signature would have carried.
 
 `docs/SIGNING.md` records the outcome, the exact wording of the rejection, what a re-application would
@@ -156,24 +156,24 @@ In the meantime, check the hash GitHub lists beside the asset (or the one in the
 running it:
 
 ```powershell
-Get-FileHash .\mediarescue-0.13.0-setup.exe -Algorithm SHA256
+Get-FileHash .\mediarescue-0.14.0-setup.exe -Algorithm SHA256
 ```
 
 ## All-in-one menu
 
 No flags to remember: run `mediarescue` with no arguments in a terminal and you get a menu.
 
-![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png?v=0.13.0)
+![mediarescue all-in-one menu: a highlighted row, plain-language hints, and arrow-key controls](docs/menu.png?v=0.14.0)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ mediarescue 0.12.0                                                           │
+│ mediarescue 0.14.0                                                           │
 │ repair damaged video and audio files; originals are never touched            │
 └──────────────────────────────────────────────────────────────────────────────┘
 
-     1  Check this machine can repair files    ffmpeg, ffprobe, disk space  
+  ▸  1  Check this machine can repair files    ffmpeg, ffprobe, disk space      
      2  Look at a file or folder               what's wrong, no changes     
-  ▸  3  Repair one file                        leaves the original alone        
+     3  Repair one file                        leaves the original alone    
      4  Repair every damaged file in a folder  skips the healthy ones       
      5  Show the damage classes                one line per class           
      6  Find a file's original online          searches the web first       
@@ -216,7 +216,7 @@ Read it left to right: what is wrong, how big, whether it can be rebuilt (`fix` 
 green or red in a terminal), and which file. The last line tells you the exact command to run next,
 with your own path already filled in. Add `--out report.json` to keep the full details.
 
-![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png?v=0.13.0)
+![mediarescue scan output: a header row, one coloured line per file, and the next command to run](docs/scan.png?v=0.14.0)
 
 `C:\media` in that screenshot is a placeholder folder, not a real machine; the paths are otherwise
 exactly what the tool printed.
@@ -488,7 +488,7 @@ host or on the site it came from. Instead of hunting for it yourself:
 mediarescue source "D:/broken-file/clip.mp4"
 ```
 
-![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png?v=0.13.0)
+![mediarescue source: the file is diagnosed, the original is found online, the repair decodes cleanly](docs/source.png?v=0.14.0)
 
 That screenshot is the output of a real run (a 30-second Big Buck Bunny clip whose `moov`
 box was cut off); the window frame around it is drawn for the README, and the shell prompt — user
